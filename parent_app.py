@@ -29,6 +29,18 @@ from shared import exofop_resolver
 from quad.app import app as quad_app
 from power2.app import app as power2_app
 
+# Legacy alias (Option 2): the unprefixed /api/... endpoints must keep serving
+# the QUADRATIC law unchanged, because NASA/TESS depend on sco-ldc.com/api/...
+# returning u1/u2. We import the quad sub-app's actual route handlers and
+# re-register them on the parent at the unprefixed paths, so the legacy API is
+# the SAME code path as /quad/api/... (zero drift) and is permanently quadratic.
+from quad.app import (
+    health as _quad_health,
+    filters as _quad_filters,
+    compute as _quad_compute,
+    resolve as _quad_resolve,
+)
+
 logger = logging.getLogger("scoldc-merged")
 logging.basicConfig(level=logging.INFO)
 
@@ -97,6 +109,17 @@ app = FastAPI(title="SCO-LDC merged (quadratic + power-2)", version="merge-step3
 
 app.mount("/quad", quad_app)
 app.mount("/power2", power2_app)
+
+# --- Legacy quadratic alias (Option 2): unprefixed /api/... -> quadratic ---
+# These reuse the quad sub-app's own handler functions, so behavior is
+# byte-identical to /quad/api/... . This preserves the contract that
+# sco-ldc.com/api/compute returns quadratic u1/u2 for existing callers
+# (NASA/TESS). The legacy path is permanently quadratic; new laws are reached
+# only via their own prefixes (/power2, later /fourparam).
+app.add_api_route("/api/health", _quad_health, methods=["GET", "HEAD"])
+app.add_api_route("/api/filters", _quad_filters, methods=["GET"])
+app.add_api_route("/api/compute", _quad_compute, methods=["GET"])
+app.add_api_route("/api/resolve", _quad_resolve, methods=["GET"])
 
 if os.path.isdir(STATIC_DIR) and os.path.exists(os.path.join(STATIC_DIR, "index.html")):
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
