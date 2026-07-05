@@ -28,6 +28,7 @@ from shared import exofop_resolver
 
 from quad.app import app as quad_app
 from power2.app import app as power2_app
+from fourparam.app import app as fourparam_app
 
 # Legacy alias (Option 2): the unprefixed /api/... endpoints must keep serving
 # the QUADRATIC law unchanged, because NASA/TESS depend on sco-ldc.com/api/...
@@ -109,6 +110,7 @@ app = FastAPI(title="SCO-LDC merged (quadratic + power-2)", version="merge-step3
 
 app.mount("/quad", quad_app)
 app.mount("/power2", power2_app)
+app.mount("/fourparam", fourparam_app)
 
 # --- Legacy quadratic alias (Option 2): unprefixed /api/... -> quadratic ---
 # These reuse the quad sub-app's own handler functions, so behavior is
@@ -128,7 +130,8 @@ else:
     def _placeholder():
         return JSONResponse({
             "service": "SCO-LDC merged",
-            "laws": {"quadratic": "/quad", "power-2": "/power2"},
+            "laws": {"quadratic": "/quad", "power-2": "/power2",
+                     "four-parameter": "/fourparam"},
             "shared_caches": {"nea": NEA_STATUS, "exofop": EXOFOP_STATUS},
             "note": "shared frontend arrives in Step 4/5",
         })

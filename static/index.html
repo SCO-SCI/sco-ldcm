@@ -209,6 +209,7 @@
           <select class="form-select" id="law" name="law">
             <option value="quad" selected>Quadratic</option>
             <option value="power2">Power-2</option>
+            <option value="fourparam">Four-parameter</option>
           </select>
         </div>
 
@@ -265,13 +266,21 @@
       </h2>
 
       <div class="d-flex gap-4 mb-3">
-        <div>
+        <div id="c1_box">
           <div class="result-label" id="c1_label"><em>g</em></div>
           <div class="result-value placeholder-dash" id="c1">—</div>
         </div>
-        <div>
+        <div id="c2_box">
           <div class="result-label" id="c2_label"><em>h</em></div>
           <div class="result-value placeholder-dash" id="c2">—</div>
+        </div>
+        <div id="c3_box" style="display:none;">
+          <div class="result-label" id="c3_label">a<sub>3</sub></div>
+          <div class="result-value placeholder-dash" id="c3">—</div>
+        </div>
+        <div id="c4_box" style="display:none;">
+          <div class="result-label" id="c4_label">a<sub>4</sub></div>
+          <div class="result-value placeholder-dash" id="c4">—</div>
         </div>
       </div>
       <table class="table table-sm mb-2">
@@ -392,6 +401,19 @@ const LAW_CONFIG = {
     models: [["ATLAS", "ATLAS"], ["PHOENIX-COND", "PHOENIX-COND"]],
     catOrder: ["Johnson-Cousins", "Sloan/SDSS", "Str\u00f6mgren", "Gaia", "Space-based", "Exoplanet"],
   },
+  fourparam: {
+    name: "Four-parameter",
+    prefix: "/fourparam",
+    coeffs: [
+      { id: "c1", label: "a<sub>1</sub>", field: "a1" },
+      { id: "c2", label: "a<sub>2</sub>", field: "a2" },
+      { id: "c3", label: "a<sub>3</sub>", field: "a3" },
+      { id: "c4", label: "a<sub>4</sub>", field: "a4" },
+    ],
+    equation: "I(\u03bc) / I(1) = 1 \u2212 a<sub>1</sub>(1\u2212\u03bc<sup>\u00bd</sup>) \u2212 a<sub>2</sub>(1\u2212\u03bc) \u2212 a<sub>3</sub>(1\u2212\u03bc<sup>3\u20442</sup>) \u2212 a<sub>4</sub>(1\u2212\u03bc\u00b2)",
+    models: [["ATLAS", "ATLAS"], ["PHOENIX", "PHOENIX"], ["PHOENIX-COND", "PHOENIX-COND"]],
+    catOrder: ["Johnson-Cousins", "Sloan/SDSS", "Str\u00f6mgren", "Gaia", "Space-based", "Exoplanet"],
+  },
 };
 
 let currentLaw = "quad";                 // default
@@ -402,7 +424,12 @@ function apiBase() { return lawCfg().prefix + "/api"; }
 // blurb. Then reload the filter list from the selected law's backend.
 async function applyLaw() {
   const cfg = lawCfg();
-  // Coefficient labels
+  // Coefficient labels + box visibility (2-coeff laws hide c3/c4; 4-param shows all).
+  const activeIds = new Set(cfg.coeffs.map(c => c.id));
+  ["c1", "c2", "c3", "c4"].forEach(id => {
+    const box = $(id + "_box");
+    if (box) box.style.display = activeIds.has(id) ? "" : "none";
+  });
   cfg.coeffs.forEach(c => { const el = $(c.id + "_label"); if (el) el.innerHTML = c.label; });
   // Equation (results panel)
   const eq = $("lawEquation"); if (eq) eq.innerHTML = cfg.equation;
