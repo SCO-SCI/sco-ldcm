@@ -67,6 +67,32 @@ def query_nea(planet_name: str) -> dict:
     return _live_single_lookup(planet_name)
 
 
+def query_nea_by_tic(tic_int: int, notation: str = "decimal") -> Optional[dict]:
+    """Resolve a bare TIC integer against NEA's TIC-named hosts.
+
+    NEA names some confirmed planets directly after their TESS Input Catalog ID
+    (they have no other designation), e.g. host "TIC 139270665" with planets
+    "TIC 139270665 b" and "... c". Those planets share one star and -- verified
+    across every multi-planet TIC host in the table -- identical stellar
+    parameters, so the first row answers the LDC question.
+
+    Returns None if this TIC is not a NEA host (the caller then tries ExoFOP).
+    """
+    if tic_int is None:
+        return None
+    rows = _hostname_index.get(f"tic {tic_int}".lower())
+    if not rows:
+        return None
+    resp = _row_to_response(rows[0])
+    # Report the TIC the user asked about. Shape is driven by how many planets this
+    # star ACTUALLY has; format follows the notation the user typed. The formatter
+    # lives in exofop_resolver so both resolvers share one naming rule.
+    from shared import exofop_resolver
+    resp["planet"] = exofop_resolver.format_tic_name(tic_int, len(rows), notation)
+    resp["hostname"] = f"TIC-{tic_int}"
+    return resp
+
+
 def query_nea_by_host(hostname: str) -> Optional[dict]:
     
     if not hostname:
@@ -130,6 +156,28 @@ def canonicalize_name(name: str) -> Optional[str]:
     return row.get("pl_name") if row else None
 
 
+def _name_namespace(name: str) -> str:
+    """Classify an identifier into its naming namespace.
+
+    Suggestions must never cross namespaces. The fuzzy matcher (difflib) compares
+    CHARACTER SEQUENCES, and TIC / TOI identifiers are lexically similar to each
+    other while being astronomically unrelated -- e.g. "tic-138973825.01" scores
+    0.741 against "toi-1782.01", clearing a 0.7 cutoff, even though the two refer
+    to completely different objects. Restricting candidates to the query's own
+    namespace makes that class of false suggestion structurally impossible.
+
+    Returns one of: "tic", "toi", "other".
+    """
+    if not name:
+        return "other"
+    s = name.strip().lower()
+    if s.startswith("tic"):
+        return "tic"
+    if s.startswith("toi"):
+        return "toi"
+    return "other"
+
+
 def get_suggestions(query: str) -> list[str]:
    
     if not _cache or not query:
@@ -140,6 +188,15 @@ def get_suggestions(query: str) -> list[str]:
     with _cache_lock:
         keys_snapshot = list(_lower_keys)
         cache_snapshot = dict(_cache)
+
+    # Namespace filter (see _name_namespace): a TIC query may only be answered
+    # with TIC candidates, a TOI query only with TOI candidates, and an ordinary
+    # name (WASP-, HD-, Kepler-, ...) is never answered with a TIC or TOI -- so a
+    # "WASP-23c" typo can never suggest a TOI that merely looks alike.
+    ns = _name_namespace(query)
+    keys_snapshot = [k for k in keys_snapshot if _name_namespace(k) == ns]
+    if not keys_snapshot:
+        return []
 
     lower_matches = difflib.get_close_matches(
         query_lower, keys_snapshot, n=SUGGESTION_LIMIT, cutoff=SUGGESTION_CUTOFF,
