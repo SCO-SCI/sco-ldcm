@@ -194,6 +194,13 @@ def get_suggestions(query: str) -> list[str]:
     # name (WASP-, HD-, Kepler-, ...) is never answered with a TIC or TOI -- so a
     # "WASP-23c" typo can never suggest a TOI that merely looks alike.
     ns = _name_namespace(query)
+    if ns == "tic":
+        # TIC lookups resolve against ExoFOP, so mistyped TICs must be matched
+        # against ExoFOP's ~7,600 TICs -- not NEA's ~57 TIC-named planets, which
+        # is the wrong catalogue and far too small to be useful. Delegate to the
+        # module that owns the TIC index.
+        from shared import exofop_resolver
+        return exofop_resolver.get_tic_suggestions(query, limit=SUGGESTION_LIMIT)
     keys_snapshot = [k for k in keys_snapshot if _name_namespace(k) == ns]
     if not keys_snapshot:
         return []
