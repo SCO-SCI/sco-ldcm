@@ -150,6 +150,33 @@
   #lookupStatus .suggestion-link:hover { color: #001745; }
   #lookupStatus .lookup-line { margin-bottom: 0.1rem; }
   #lookupStatus.text-danger { font-weight: 500; }
+  .coef-panel {
+    border: 1px solid #dfe4ea;
+    border-radius: 4px;
+    padding: 0.55rem 0.8rem 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+  .coef-panel-derived {
+    border-color: #cdd9e8;
+    background: #f7f9fc;
+    margin-bottom: 0.9rem;
+  }
+  .coef-panel-hdr {
+    font-size: 0.67rem;
+    color: #5f7391;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.35rem;
+  }
+  .maxted-warn {
+    font-size: 0.7rem;
+    color: #8a6d3b;
+    background: #fcf8e3;
+    border-left: 3px solid #d9c07a;
+    padding: 0.3rem 0.5rem;
+    margin-top: 0.5rem;
+    border-radius: 2px;
+  }
   .compute-success {
     color: #5474a5 !important;
     font-size: 0.72rem;
@@ -266,7 +293,9 @@
         </button>
       </h2>
 
-      <div class="d-flex gap-4 mb-3">
+      <div id="tabPanel" class="coef-panel">
+        <div id="tabPanelHdr" class="coef-panel-hdr" style="display:none;">Claret &amp; Southworth</div>
+        <div class="d-flex gap-4">
         <div id="c1_box">
           <div class="result-label" id="c1_label"><em>g</em></div>
           <div class="result-value placeholder-dash" id="c1">—</div>
@@ -282,6 +311,24 @@
         <div id="c4_box" style="display:none;">
           <div class="result-label" id="c4_label">a<sub>4</sub></div>
           <div class="result-value placeholder-dash" id="c4">—</div>
+        </div>
+        </div>
+      </div>
+
+      <div id="derivedPanel" class="coef-panel coef-panel-derived" style="display:none;">
+        <div class="coef-panel-hdr">Maxted (2018)</div>
+        <div class="d-flex gap-4">
+          <div>
+            <div class="result-label"><em>h</em><sub>1</sub></div>
+            <div class="result-value placeholder-dash" id="d1">—</div>
+          </div>
+          <div>
+            <div class="result-label"><em>h</em><sub>2</sub></div>
+            <div class="result-value placeholder-dash" id="d2">—</div>
+          </div>
+        </div>
+        <div id="maxtedWarn" class="maxted-warn" style="display:none;">
+          Outside the realizable region (<em>h</em><sub>1</sub> &lt; 1, 0 &lt; <em>h</em><sub>2</sub> &le; <em>h</em><sub>1</sub>; Short et al. 2019).
         </div>
       </div>
       <table class="table table-sm mb-2">
@@ -893,12 +940,43 @@ function fmt(x) {
   return x.toFixed(4);
 }
 
+function renderDerived(d) {
+  const panel = $('derivedPanel');
+  const hdr   = $('tabPanelHdr');
+  const warn  = $('maxtedWarn');
+  // Only power-2 has the Maxted reparameterization. Guard on the fields being
+  // present so an older backend (no h1/h2) simply hides the panel.
+  const show = (currentLaw === 'power2' && d && d.h1 != null && d.h2 != null);
+  if (hdr)   hdr.style.display   = show ? '' : 'none';
+  if (panel) panel.style.display = show ? '' : 'none';
+  if (!show) return;
+  $('d1').textContent = fmt(d.h1);
+  $('d1').classList.remove('placeholder-dash');
+  $('d2').textContent = fmt(d.h2);
+  $('d2').classList.remove('placeholder-dash');
+  if (warn) warn.style.display = (d.maxted_valid === false) ? '' : 'none';
+}
+
+function clearDerived() {
+  const panel = $('derivedPanel');
+  const hdr   = $('tabPanelHdr');
+  const warn  = $('maxtedWarn');
+  if (panel) panel.style.display = 'none';
+  if (hdr)   hdr.style.display   = 'none';
+  if (warn)  warn.style.display  = 'none';
+  ['d1','d2'].forEach(id => {
+    const e = $(id);
+    if (e) { e.textContent = '—'; e.classList.add('placeholder-dash'); }
+  });
+}
+
 function showResult(d) {
   lawCfg().coeffs.forEach(c => {
     const el = $(c.id);
     el.textContent = fmt(d[c.field]);
     el.classList.remove('placeholder-dash');
   });
+  renderDerived(d);
   $('m_filter').textContent = `${d.filter_name} (${d.filter_code})`;
   $('m_model').textContent  = d.model;
   $('m_method').textContent = (d.grid && d.grid.on_grid) ? 'Direct table value (on grid)' : 'Trilinear interpolation';
@@ -911,6 +989,7 @@ function clearResult() {
     $(c.id).textContent = '—';
     $(c.id).classList.add('placeholder-dash');
   });
+  clearDerived();
   ['m_filter','m_model','m_method','m_source'].forEach(id => $(id).textContent = '—');
   $('copyBtn').hidden = true;
 }
@@ -934,7 +1013,17 @@ $('copyBtn').addEventListener('click', async () => {
   // (2 for quadratic/power-2, 4 for four-parameter). Mirrors showResult().
   const values = lawCfg().coeffs.map(c => $(c.id).textContent.trim());
   if (values.length === 0 || values.some(v => v === '—')) return;
-  const text = values.join('   ');
+  let text;
+  if (currentLaw === 'power2') {
+    // Power-2 breaks the bare-values pattern: the four numbers on screen come
+    // from two different parameterizations, so label them to avoid ambiguity.
+    const d1v = $('d1').textContent.trim();
+    const d2v = $('d2').textContent.trim();
+    text = `g=${values[0]} h=${values[1]}`;
+    if (d1v !== '—' && d2v !== '—') text += ` h1=${d1v} h2=${d2v}`;
+  } else {
+    text = values.join('   ');
+  }
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);

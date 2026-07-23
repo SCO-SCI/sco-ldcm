@@ -517,6 +517,39 @@ def _filter_has_model(filter_code: str, storage_model: str) -> bool:
     return False
 
 
+def maxted_params(g: float, h: float) -> Tuple[float, float, bool]:
+    """Maxted (2018) reparameterization of the power-2 law.
+
+    The power-2 law as tabulated by Claret & Southworth is
+
+        I(mu)/I(1) = 1 - g * (1 - mu**h)
+
+    Maxted (2018, A&A 616, A39) defines two transformed coefficients that
+    are far less correlated than (g, h) and therefore much better behaved
+    as free parameters in a transit light-curve fit:
+
+        h1 = 1 - g * (1 - 2**-h)      [ = I(mu = 0.5) ]
+        h2 = g * 2**-h                [ = h1 - I(mu = 0) ]
+
+    The inverse transform is g = 1 - h1 + h2 and h = log2(g / h2).
+
+    Maxted's original paper gave the realizable region as h1 < 1 and
+    h1 + h2 <= 1; that condition is incorrect (it admits combinations with
+    negative intensity at disc centre). Short et al. (2019, RNAAS 3, 117)
+    give the corrected region, which is what is checked here:
+
+        h1 < 1  and  0 < h2 <= h1
+
+    Returns (h1, h2, valid). Values are returned unrounded, matching the
+    treatment of g and h; formatting is left to the client.
+    """
+    two_pow = 2.0 ** (-h)
+    h1 = 1.0 - g * (1.0 - two_pow)
+    h2 = g * two_pow
+    valid = (h1 < 1.0) and (0.0 < h2 <= h1)
+    return h1, h2, valid
+
+
 def compute_ldcs(teff: float, logg: float, feh: float,
                  filter_code: str, model: str
                  ) -> Dict[str, object]:
@@ -630,9 +663,14 @@ def compute_ldcs(teff: float, logg: float, feh: float,
                 g_coef += weight * c1
                 h_coef += weight * c2
 
+    h1_coef, h2_coef, maxted_valid = maxted_params(g_coef, h_coef)
+
     return {
         "g": g_coef,
         "h": h_coef,
+        "h1": h1_coef,
+        "h2": h2_coef,
+        "maxted_valid": maxted_valid,
         "filter_code": filter_code,
         "filter_name": next(f["name"] for f in FILTER_REGISTRY if f["code"] == filter_code),
         "model": _display_model(filter_code, storage_model),
