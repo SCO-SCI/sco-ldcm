@@ -930,10 +930,11 @@ function showCopyToast(message, isError) {
 $('copyBtn').addEventListener('click', async () => {
   const btn = $('copyBtn');
   const label = $('copyBtnLabel');
-  const gText = $('g').textContent.trim();
-  const hText = $('h').textContent.trim();
-  if (gText === '—' || hText === '—') return;
-  const text = gText + '   ' + hText;
+  // Law-aware: read whichever coefficient boxes the current law uses
+  // (2 for quadratic/power-2, 4 for four-parameter). Mirrors showResult().
+  const values = lawCfg().coeffs.map(c => $(c.id).textContent.trim());
+  if (values.length === 0 || values.some(v => v === '—')) return;
+  const text = values.join('   ');
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);
