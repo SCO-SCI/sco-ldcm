@@ -4,7 +4,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SCO-LDC API Reference (merged)</title>
-<meta name="description" content="HTTP/JSON API reference for sco-ldc: quadratic and power-2 limb-darkening coefficients and exoplanet host-star parameter resolution.">
+<meta name="description" content="HTTP/JSON API reference for sco-ldc: quadratic and power-2 limb-darkening coefficients (including the Maxted h1, h2 reparameterization) and exoplanet host-star parameter resolution.">
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -195,7 +195,8 @@
     stellar parameters from the NASA Exoplanet Archive (NEA) and ExoFOP-TESS. The service supports
     two limb-darkening laws, each reached through its own path prefix: the <strong>quadratic</strong>
     law (coefficients u<sub>1</sub>, u<sub>2</sub>) and the <strong>power-2</strong> law
-    (coefficients g, h).
+    (coefficients g, h, together with the derived Maxted h<sub>1</sub>, h<sub>2</sub>
+    reparameterization).
   </p>
   <p class="mb-2">
     This reference is language-neutral and intended for any HTTP client (Java, JavaScript, Python, curl, etc.).
@@ -234,7 +235,7 @@
       <thead><tr><th>Law</th><th>Path prefix</th><th>Coefficients</th></tr></thead>
       <tbody>
         <tr><td>Quadratic</td><td><code>/quad/api/&hellip;</code></td><td>u<sub>1</sub>, u<sub>2</sub></td></tr>
-        <tr><td>Power-2</td><td><code>/power2/api/&hellip;</code></td><td>g, h</td></tr>
+        <tr><td>Power-2</td><td><code>/power2/api/&hellip;</code></td><td>g, h (plus derived h<sub>1</sub>, h<sub>2</sub>)</td></tr>
       </tbody>
     </table>
     <p class="mb-2">In addition, the unprefixed paths <code>/api/health</code>, <code>/api/filters</code>,
@@ -312,20 +313,21 @@
         <tr><td><span class="method">GET</span> <code>/api/resolve</code></td><td>Resolve an exoplanet name or TOI to host-star T<sub>eff</sub>/logg/[Fe/H]</td></tr>
         <tr><td><span class="method">GET</span> <code>/api/compute</code></td><td>Compute (u<sub>1</sub>, u<sub>2</sub>) &mdash; quadratic; legacy alias</td></tr>
         <tr><td><span class="method">GET</span> <code>/quad/api/&hellip;</code></td><td>Quadratic law (health, filters, resolve, compute &rarr; u<sub>1</sub>, u<sub>2</sub>)</td></tr>
-        <tr><td><span class="method">GET</span> <code>/power2/api/&hellip;</code></td><td>Power-2 law (health, filters, resolve, compute &rarr; g, h)</td></tr>
+        <tr><td><span class="method">GET</span> <code>/power2/api/&hellip;</code></td><td>Power-2 law (health, filters, resolve, compute &rarr; g, h, h<sub>1</sub>, h<sub>2</sub>)</td></tr>
       </tbody>
     </table>
     <p class="mb-2">The unprefixed <code>/api/&hellip;</code> endpoints are the legacy quadratic alias and are
     identical to <code>/quad/api/&hellip;</code>. Within each law prefix, the four endpoints
     (<code>health</code>, <code>filters</code>, <code>resolve</code>, <code>compute</code>) have the same shapes
     documented below; only the coefficient fields of <code>compute</code> differ by law
-    (u<sub>1</sub>, u<sub>2</sub> for quadratic; g, h for power-2). The <code>resolve</code> endpoint is
+    (u<sub>1</sub>, u<sub>2</sub> for quadratic; g, h plus derived h<sub>1</sub>, h<sub>2</sub> for
+    power-2). The <code>resolve</code> endpoint is
     law-independent &mdash; it returns host-star parameters and is identical under every prefix.</p>
     <h3>Typical integration flow</h3>
     <ol class="flow">
       <li><strong>(Optional, at startup or once per session.)</strong> Call <code>/api/filters</code> (or <code>/&lt;law&gt;/api/filters</code>) once to discover what filters and models are available, with their grid ranges. Cache the result locally.</li>
       <li><strong>(Optional, per target.)</strong> Call <code>/api/resolve?planet=&lt;NAME&gt;</code> to fetch host-star T<sub>eff</sub>/logg/[Fe/H] from a planet or TOI name.</li>
-      <li><strong>(Per LDC requested.)</strong> Call <code>/api/compute?&hellip;</code> for quadratic u<sub>1</sub>, u<sub>2</sub>, or <code>/power2/api/compute?&hellip;</code> for power-2 g, h.</li>
+      <li><strong>(Per LDC requested.)</strong> Call <code>/api/compute?&hellip;</code> for quadratic u<sub>1</sub>, u<sub>2</sub>, or <code>/power2/api/compute?&hellip;</code> for power-2 g, h (the response also carries the derived h<sub>1</sub>, h<sub>2</sub>).</li>
     </ol>
   </section>
 
@@ -626,6 +628,9 @@
     <pre class="code">{
   <span class="c-key">"g"</span>: <span class="c-num">0.7904</span>,
   <span class="c-key">"h"</span>: <span class="c-num">0.7420</span>,
+  <span class="c-key">"h1"</span>: <span class="c-num">0.6822</span>,
+  <span class="c-key">"h2"</span>: <span class="c-num">0.4726</span>,
+  <span class="c-key">"maxted_valid"</span>: <span class="c-num">true</span>,
   <span class="c-key">"filter_code"</span>: <span class="c-str">"V"</span>,
   <span class="c-key">"filter_name"</span>: <span class="c-str">"Johnson V"</span>,
   <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>,
@@ -633,10 +638,52 @@
   <span class="c-key">"grid"</span>: { <span class="c-str">&hellip; same structure as the quadratic response &hellip;</span> }
 }</pre>
     <p class="mb-2" style="color:#4c555d;">The power-2 response is identical in shape to the quadratic response except
-    that the two coefficient fields are <code>g</code> and <code>h</code> (the power-2 coefficients) rather than
-    <code>u1</code> and <code>u2</code>. All other fields (<code>filter_code</code>, <code>filter_name</code>,
+    that the tabulated coefficient fields are <code>g</code> and <code>h</code> (the power-2 coefficients) rather than
+    <code>u1</code> and <code>u2</code>, and that three additional fields
+    (<code>h1</code>, <code>h2</code>, <code>maxted_valid</code>) carry the Maxted reparameterization described
+    below. All other fields (<code>filter_code</code>, <code>filter_name</code>,
     <code>model</code>, <code>citation</code>, and the <code>grid</code> block) have the same meaning as documented
     below. (Numeric values are illustrative.)</p>
+
+    <h3>Power-2 response fields</h3>
+    <table class="api mb-2">
+      <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>g</code></td><td><span class="type">number</span></td><td>Tabulated power-2 linear coefficient, interpolated from the Claret &amp; Southworth tables</td></tr>
+        <tr><td><code>h</code></td><td><span class="type">number</span></td><td>Tabulated power-2 exponent, interpolated from the Claret &amp; Southworth tables</td></tr>
+        <tr><td><code>h1</code></td><td><span class="type">number</span></td><td><strong>Derived.</strong> Maxted (2018) reparameterization; equals the specific intensity at &mu;&nbsp;=&nbsp;0.5</td></tr>
+        <tr><td><code>h2</code></td><td><span class="type">number</span></td><td><strong>Derived.</strong> Maxted (2018) reparameterization; equals h<sub>1</sub> &minus; I(&mu;&nbsp;=&nbsp;0)</td></tr>
+        <tr><td><code>maxted_valid</code></td><td><span class="type">boolean</span></td><td>true if (h<sub>1</sub>, h<sub>2</sub>) fall inside the realizable region h<sub>1</sub> &lt; 1 and 0 &lt; h<sub>2</sub> &le; h<sub>1</sub></td></tr>
+      </tbody>
+    </table>
+
+    <h3>The Maxted h<sub>1</sub>, h<sub>2</sub> reparameterization</h3>
+    <p class="mb-2">The power-2 law as tabulated by Claret &amp; Southworth is</p>
+    <pre class="code">I(&mu;) / I(1) = 1 &minus; g &middot; (1 &minus; &mu;<sup>h</sup>)</pre>
+    <p class="mb-2">Maxted (2018, A&amp;A 616, A39) defines two transformed coefficients that are far less
+    strongly correlated than (g, h) and are therefore much better behaved as free parameters in a
+    transit light-curve fit:</p>
+    <pre class="code">h<sub>1</sub> = 1 &minus; g &middot; (1 &minus; 2<sup>&minus;h</sup>)      [ = I(&mu; = 0.5) ]
+h<sub>2</sub> = g &middot; 2<sup>&minus;h</sup>                [ = h<sub>1</sub> &minus; I(&mu; = 0) ]</pre>
+    <p class="mb-2">The inverse transform is <code>g = 1 &minus; h1 + h2</code> and
+    <code>h = log<sub>2</sub>(g / h2)</code>.</p>
+    <ul class="notes">
+      <li><code>h1</code> and <code>h2</code> are <strong>derived</strong> from the interpolated <code>g</code> and
+      <code>h</code>; they are not separately tabulated. Cite Claret &amp; Southworth for the underlying
+      coefficients and Maxted (2018) for the transformation.</li>
+      <li>Note that <code>h</code> is the power-2 <em>exponent</em> as published by Claret and is unrelated to
+      <code>h1</code> and <code>h2</code>, which are the Maxted transformed parameters.</li>
+      <li>Maxted&rsquo;s original paper gave the realizable region as h<sub>1</sub> &lt; 1 and
+      h<sub>1</sub> + h<sub>2</sub> &le; 1. That condition is incorrect; the corrected region, used by
+      <code>maxted_valid</code>, is <strong>h<sub>1</sub> &lt; 1 and 0 &lt; h<sub>2</sub> &le; h<sub>1</sub></strong>
+      (Short et al. 2019, RNAAS 3, 117).</li>
+      <li>A small fraction of tabulated grid points (approximately 0.9% of power-2 grid points, concentrated at
+      very low metallicity where g &gt; 1) fall outside the realizable region. These are genuine published
+      values, not interpolation artifacts. <code>maxted_valid</code> is returned as <code>false</code> for these
+      cases; the <code>g</code> and <code>h</code> values remain valid and usable.</li>
+      <li><code>h1</code> and <code>h2</code> are returned as full-precision IEEE 754 doubles and are not
+      artificially rounded, matching the treatment of <code>g</code> and <code>h</code>.</li>
+    </ul>
 
     <h3>Citation strings by source</h3>
     <ul class="notes">
@@ -650,6 +697,9 @@
       <li>CHEOPS is available for PHOENIX-COND only; CBB is available for ATLAS only. All other power-2 filters support both models.</li>
       <li>Power-2 adds the Gaia bands (G, G_BP, G_RP); it does not include the CoRoT or Spitzer bands that the quadratic law offers.</li>
       <li>The PHOENIX-COND power-2 coefficients use the M2 (midpoint) truncation method.</li>
+      <li>Every power-2 compute response also carries the derived Maxted parameters <code>h1</code> and
+      <code>h2</code> and the <code>maxted_valid</code> flag; see &lsquo;The Maxted h<sub>1</sub>, h<sub>2</sub>
+      reparameterization&rsquo; above.</li>
     </ul>
 
     <h3>Notes specific to the quadratic law</h3>
