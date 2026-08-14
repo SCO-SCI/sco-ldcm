@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.DS_Store
+nea_parameters_fallback.tsv
+exofop_toi_fallback.tsv

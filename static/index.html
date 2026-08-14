@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCO-LDC Calculator</title>
+<meta name="description" content="Computes quadratic (u1, u2), power-2 (g, h) and four-parameter nonlinear (a1-a4) limb-darkening coefficients for exoplanet transit light-curve fits, by trilinear interpolation of published Claret tables.">
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/180.png">
+
+<style>
+  body { background: #fff; font-size: 0.875rem; }
+  .btn-primary,
+  .btn-primary:focus,
+  .btn-primary:focus-visible,
+  .btn-primary:active,
+  .btn-primary:active:focus,
+  .btn-check:active+.btn-primary,
+  .btn-check:checked+.btn-primary {
+    background-color: #5474a5 !important;
+    border-color: #5474a5 !important;
+    box-shadow: none !important;
+  }
+  .btn-primary:hover {
+    background-color: #001745 !important;
+    border-color: #001745 !important;
+  }
+  a { color: #001f5b; }
+  a:hover { color: #001745; }
+  h1 { font-size: 1.35rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1rem; font-weight: 600; }
+  .hint { color: #4c555d; font-weight: 400; font-size: 0.72rem; margin-left: 0.3rem; }  
+  .hint.tic-note { color: #5474a5 !important; font-weight: 600; margin-left: 0; }
+  label.form-label { font-size: 0.8rem; font-weight: 500; margin-bottom: 0.1rem; }
+  .form-control, .form-select { font-size: 0.825rem; padding: 0.25rem 0.5rem; border-color: #4c555d; border-radius: 0.2rem; }
+  .form-control:focus, .form-select:focus { border-color: #000; box-shadow: 0 0 0 0.2rem rgba(0,31,91,0.15); }
+  .btn { font-size: 0.8rem; padding: 0.3rem 0.7rem; }
+  .result-value { font-size: 1.0rem; font-weight: 600; color: #001f5b; font-variant-numeric: tabular-nums; line-height: 1; }
+  .result-label { font-style: italic; color: #4c555d; font-size: 0.85rem; margin-bottom: 0.05rem; }
+  .law-eq { font-style: italic; color: #4c555d; font-size: 0.825rem; }
+  footer { color: #000000; font-size: 0.75rem; opacity: 1; }
+  .placeholder-dash { color: #adb5bd; }
+  .table-sm td { padding: 0.2rem 0.35rem; font-size: 0.75rem; }
+  .table-sm, .table-sm td { border-color: #000; }
+  hr { margin: 0.75rem 0; color: #000; opacity: 0.6; }
+  .lookup-box {
+    border: 1px solid #000;
+    border-radius: 0.2rem;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .lookup-box .mb-3:last-child { margin-bottom: 0 !important; }
+  .mb-3 { margin-bottom: 0.5rem !important; }
+  .container.py-3 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+
+  /* Force all text above Methodology to black */
+  .top-section,
+  .top-section .text-muted,
+  .top-section .hint,
+  .top-section .result-label,
+  .top-section .law-eq,
+  .top-section .table-sm td,
+  .top-section label.form-label { color: #000 !important; } 
+  
+  #methodology ~ p.text-muted { color: #000 !important; }
+
+  /* Copy LDCs button — appears in the Results heading after a successful query */
+  .copy-btn {
+    background: transparent;
+    border: 1px solid #5474a5;
+    padding: 0.2rem 0.4rem;
+    margin-left: 0.5rem;
+    color: #5474a5;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.53rem;
+    font-weight: 500;
+    vertical-align: middle;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: all 0.15s ease;
+  }
+  .copy-btn:hover { background: #5474a5; color: #fff; }
+  .copy-btn:active { background: #001745; border-color: #001745; }
+  .copy-btn.copied-feedback { color: #1d7a3e; border-color: #1d7a3e; background: transparent; }
+  .copy-btn.copied-feedback:hover { background: transparent; color: #1d7a3e; }
+  .copy-btn[hidden] { display: none; }
+
+  /* Toast for clipboard-copy feedback */
+  .copy-toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1d7a3e;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 9999;
+  }
+  .copy-toast.show { opacity: 1; }
+  
+  input:invalid {
+  box-shadow: none;
+  }
+
+  ::-webkit-validation-bubble-icon,
+  ::-moz-validation-bubble-icon {
+    display: none;
+  }
+    
+  /* Planet-name lookup area */
+  .planet-row {
+    display: flex;
+    gap: 0.4rem;
+    align-items: stretch;
+  }
+  .planet-row .form-control { flex: 1; }
+  #lookupBtn {
+    white-space: nowrap;
+    background-color: #5474a5;
+    border-color: #5474a5;
+    color: #fff;
+  }
+  #lookupBtn:hover {
+    background-color: #001745;
+    border-color: #001745;
+    color: #fff;
+  }
+  #lookupBtn:disabled {
+    background-color: #adb5bd;
+    border-color: #adb5bd;
+    color: #fff;
+  }
+  /* Suggestion links inside the lookup status area */
+  #lookupStatus .suggestion-link {
+    color: #001f5b;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  /* Override Bootstrap red color */
+  .text-danger {
+  color: #cc0000 !important;
+}
+  #lookupStatus .suggestion-link:hover { color: #001745; }
+  #lookupStatus .lookup-line { margin-bottom: 0.1rem; }
+  #lookupStatus.text-danger { font-weight: 500; }
+  .coef-panel {
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 0.55rem 0.8rem 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+  .coef-panel-derived {
+    border-color: #444444;
+    /* Same gray as a disabled/locked form field (e.g. [Fe/H] when a model
+       supports solar metallicity only): rgb(232, 236, 239). */
+    background: #e8ecef;
+    margin-bottom: 0.9rem;
+  }
+  .coef-panel-hdr {
+    font-size: 0.67rem;
+    color: #000000;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.35rem;
+  }
+  .maxted-warn {
+    font-size: 0.7rem;
+    color: #8a6d3b;
+    background: #fcf8e3;
+    border-left: 3px solid #d9c07a;
+    padding: 0.3rem 0.5rem;
+    margin-top: 0.5rem;
+    border-radius: 2px;
+  }
+  .compute-success {
+    color: #5474a5 !important;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  
+</style>
+</head>
+
+<body>
+
+<div class="container py-3" style="max-width: 820px; margin-top: 1.5rem;">
+
+  <div class="top-section">
+
+  <h1 class="mb-1" id="pageTitle">SCO LDC Calculator</h1>
+  <p class="text-muted small mb-0">
+    Computes quadratic (<em>u<sub>1</sub></em>, <em>u<sub>2</sub></em>), Power-2
+    (<em>g</em>, <em>h</em>) and four-parameter nonlinear
+    (<em>a<sub>1</sub></em>&ndash;<em>a<sub>4</sub></em>) limb-darkening coefficients
+    for exoplanet transit light-curve fits, by trilinear interpolation of published
+    Claret tables in T<sub>eff</sub>, log(g), and [Fe/H].
+  </p>
+
+
+  
+
+
+  <hr>
+
+  <div class="row g-3">
+
+    
+    <div class="col-md-6">
+      <h2 class="mb-2">Inputs</h2>
+
+	  
+	  <form id="form" autocomplete="off" novalidate>      
+
+        <div class="mb-3">
+          <label for="filter" class="form-label">Filter</label>
+          <select class="form-select" id="filter" name="filter" required=""></select>
+        </div>
+
+        <div class="lookup-box">
+          <div class="mb-3">
+            <label for="planetName" class="form-label">
+              Exoplanet name<span class="hint">e.g. WASP-23 b or TOI-700.01</span>
+            </label>
+            <div class="planet-row">
+              <input type="text" class="form-control" id="planetName" name="planetName" placeholder="Enter planet name, TIC, or TOI...">
+              <button type="button" class="btn btn-primary" id="lookupBtn">Look up</button>
+            </div>
+            <div id="lookupStatus" class="mt-1 small"></div>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label for="law" class="form-label">Limb-darkening law</label>
+          <select class="form-select" id="law" name="law">
+            <option value="quad" selected>Quadratic</option>
+            <option value="power2">Power-2</option>
+            <option value="fourparam">Four-parameter</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label for="teff" class="form-label">
+            T<sub>eff</sub> (K)<span class="hint" id="teffHint">&nbsp;</span>
+          </label>
+          <input type="number" class="form-control" id="teff" name="teff" step="1" required="">
+        </div>
+
+        <div class="mb-3">
+          <label for="logg" class="form-label">
+            log(g) (cgs dex)<span class="hint" id="loggHint">&nbsp;</span>
+          </label>
+          <input type="number" class="form-control" id="logg" name="logg" step="0.01" required="">
+        </div>
+
+        <div class="mb-3">
+          <label for="feh" class="form-label">
+            [Fe/H] (dex)<span class="hint" id="fehHint">&nbsp;</span>
+          </label>
+          <input type="number" class="form-control" id="feh" name="feh" step="0.01" required="">
+        </div>
+
+        <div class="mb-3">
+          <label for="model" class="form-label">Stellar atmosphere model</label>
+          <select class="form-select" id="model" name="model">
+            <option value="ATLAS" selected>ATLAS</option>
+            <option value="PHOENIX">PHOENIX</option>
+          </select>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-primary" id="submitBtn">Compute LDCs</button>
+          <button type="button" class="btn btn-outline-secondary" id="exampleBtn">Fill Example</button>
+          <button type="button" class="btn btn-outline-secondary" id="clearBtn">Clear</button>
+        </div>
+
+        <div id="status" class="mt-2 small text-muted"></div>
+      </form>
+    </div>
+
+    
+    <div class="col-md-6">
+      <h2 class="mb-2">
+        Results
+        <button type="button" class="copy-btn" id="copyBtn" hidden title="Copy LDCs to clipboard" aria-label="Copy LDCs to clipboard">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M4 0a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2v-1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v2h1V2a2 2 0 0 0-2-2H4z"/>
+            <path d="M6 4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H8z"/>
+          </svg>
+          <span id="copyBtnLabel">Copy</span>
+        </button>
+      </h2>
+
+      <div id="tabPanel" class="coef-panel">
+        <div id="tabPanelHdr" class="coef-panel-hdr" style="display:none;">Claret &amp; Southworth</div>
+        <div class="d-flex gap-4">
+        <div id="c1_box">
+          <div class="result-label" id="c1_label"><em>g</em></div>
+          <div class="result-value placeholder-dash" id="c1">—</div>
+        </div>
+        <div id="c2_box">
+          <div class="result-label" id="c2_label"><em>h</em></div>
+          <div class="result-value placeholder-dash" id="c2">—</div>
+        </div>
+        <div id="c3_box" style="display:none;">
+          <div class="result-label" id="c3_label">a<sub>3</sub></div>
+          <div class="result-value placeholder-dash" id="c3">—</div>
+        </div>
+        <div id="c4_box" style="display:none;">
+          <div class="result-label" id="c4_label">a<sub>4</sub></div>
+          <div class="result-value placeholder-dash" id="c4">—</div>
+        </div>
+        </div>
+      </div>
+
+      <!-- ==================================================================
+           Maxted (2018) h1/h2 display — TEMPORARILY HIDDEN FROM THE UI.
+
+           The backend still computes and returns h1, h2 and maxted_valid
+           (see power2/ldc_core.py :: maxted_params); only the presentation
+           is suppressed here, pending further study of the power-2 /
+           Maxted reparameterization before public release.
+
+           TO RESTORE: un-comment this block, and re-enable the `show`
+           flag in renderDerived() and the h1/h2 clipboard text in the
+           copy handler (both marked with "MAXTED DISPLAY DISABLED").
+           ==================================================================
+      <div id="derivedPanel" class="coef-panel coef-panel-derived" style="display:none;">
+        <div class="coef-panel-hdr">Maxted (2018)</div>
+        <div class="d-flex gap-4">
+          <div>
+            <div class="result-label"><em>h</em><sub>1</sub></div>
+            <div class="result-value placeholder-dash" id="d1">—</div>
+          </div>
+          <div>
+            <div class="result-label"><em>h</em><sub>2</sub></div>
+            <div class="result-value placeholder-dash" id="d2">—</div>
+          </div>
+        </div>
+        <div id="maxtedWarn" class="maxted-warn" style="display:none;">
+          Outside the realizable region (<em>h</em><sub>1</sub> &lt; 1, 0 &lt; <em>h</em><sub>2</sub> &le; <em>h</em><sub>1</sub>; Short et al. 2019).
+        </div>
+      </div>
+      -->
+
+      <table class="table table-sm mb-2">
+        <tbody id="metaTable">
+          <tr><td>Filter</td><td id="m_filter">—</td></tr>
+          <tr><td>Model</td><td id="m_model">—</td></tr>
+          <tr><td>Method</td><td id="m_method">—</td></tr>
+          <tr><td>Source</td><td id="m_source">—</td></tr>
+        </tbody>
+      </table>
+      <p class="law-eq mb-0" id="lawEquation">
+        I(μ) / I(1) = 1 − g·(1 − μ<sup>h</sup>)
+      </p>
+      <div id="computeResultMessage" class="mt-2 compute-success"></div>
+    </div>
+
+  </div>
+
+  </div>
+
+  <hr>
+
+  <div class="citation-panel">
+    <div class="small" style="color:#000;">
+      Mullen, E. H., Conti, D. M., &amp; Collins, K. A. 2026,
+      <a href="https://iopscience.iop.org/article/10.3847/2515-5172/ae7e67" target="_blank" rel="noopener">&ldquo;SCO-LDC:
+      A Web Calculator for Quadratic Limb-darkening Coefficients by Trilinear Interpolation of Claret Grids&rdquo;</a>,
+      <em>Research Notes of the AAS</em>, Vol. 10, No. 6. DOI:
+      <a href="https://iopscience.iop.org/article/10.3847/2515-5172/ae7e67" target="_blank" rel="noopener">10.3847/2515-5172/ae7e67</a>.
+      Published by the American Astronomical Society.
+    </div>
+  </div>
+
+  <h2 id="methodology" class="mt-3" style="color: #000;">Methodology</h2>  
+  
+  <p class="small text-muted mb-2">
+    Quadratic limb-darkening coefficients are derived by trilinear interpolation of
+    published tables in T<sub>eff</sub>, log(g), and [Fe/H]. For Johnson–Cousins,
+    Sloan/SDSS, Strömgren, Kepler, CoRoT, and Spitzer filters, coefficients are from
+    <a href="https://www.aanda.org/articles/aa/abs/2011/05/aa16451-10/aa16451-10.html" target="_blank" rel="noopener">Claret &amp; Bloemen (2011)</a>
+    using ATLAS9 plane-parallel models. For TESS, coefficients are from
+    <a href="https://www.aanda.org/articles/aa/abs/2018/10/aa33060-18/aa33060-18.html" target="_blank" rel="noopener">Claret (2018)</a>
+    using PHOENIX-COND spherical models at solar metallicity. For the CBB filter,
+    coefficients are from
+    <a href="https://iopscience.iop.org/article/10.3847/2515-5172/ac8c3f" target="_blank" rel="noopener">Claret, Mullen &amp; Gary (2022) RNAAS</a>,
+    using ATLAS9 plane-parallel models. For the CHEOPS filter, coefficients are from
+    <a href="https://iopscience.iop.org/article/10.3847/2515-5172/abdcb3" target="_blank" rel="noopener">Claret (2021, RNAAS 5, 13)</a>,
+    using ATLAS9 plane-parallel models.
+  </p>
+
+  <p class="small text-muted mb-2">
+    Power-2 coefficients are similarly derived for Johnson–Cousins, Sloan/SDSS,
+    Strömgren, Gaia, Kepler, and TESS filters, with coefficients from
+    <a href="https://www.aanda.org/articles/aa/full_html/2022/08/aa43273-22/aa43273-22.html" target="_blank" rel="noopener">Claret &amp; Southworth (2022, <em>A&amp;A</em> 664, A128)</a>
+    using ATLAS9 plane-parallel models and from
+    <a href="https://www.aanda.org/articles/aa/full_html/2023/06/aa45784-22/aa45784-22.html" target="_blank" rel="noopener">Claret &amp; Southworth (2023, <em>A&amp;A</em> 674, A63)</a>
+    using PHOENIX-COND spherical models at solar metallicity. For the CHEOPS filter,
+    coefficients are from Claret &amp; Southworth (2023) using PHOENIX-COND models
+    (solar metallicity only).
+  </p>
+
+  <p class="small text-muted mb-2">
+    Four-parameter nonlinear coefficients (<em>a<sub>1</sub></em>&ndash;<em>a<sub>4</sub></em>)
+    are derived by the same trilinear interpolation. For Johnson&ndash;Cousins, Sloan/SDSS,
+    Strömgren, and Kepler filters, ATLAS9 plane-parallel coefficients are from
+    <a href="https://www.aanda.org/articles/aa/abs/2011/05/aa16451-10/aa16451-10.html" target="_blank" rel="noopener">Claret &amp; Bloemen (2011)</a>
+    and PHOENIX-COND spherical coefficients at solar metallicity are from
+    <a href="https://www.aanda.org/articles/aa/full_html/2023/06/aa45784-22/aa45784-22.html" target="_blank" rel="noopener">Claret &amp; Southworth (2023, <em>A&amp;A</em> 674, A63)</a>.
+    For the Gaia (G<sub>BP</sub>, G, G<sub>RP</sub>), TESS, and CHEOPS filters, coefficients
+    are from Claret &amp; Southworth (2023) using PHOENIX-COND models (solar metallicity only).
+    For the CoRoT and Spitzer IRAC filters, coefficients are from Claret &amp; Bloemen (2011)
+    using ATLAS9 plane-parallel and PHOENIX models.
+  </p>
+
+  <p class="small text-muted mb-0">
+    Microturbulent velocity is fixed at ξ = 2.0 km/s. The LSM fitting method is used
+    throughout. No extrapolation is performed beyond grid boundaries.
+	
+	<span class="hint tic-note" style="display:inline">A REST API is available and is documented
+	<a href="/static/sco_ldc_api_reference.html" target="_blank" rel="noopener">here</a>.</span>
+	
+  </p>
+
+  <hr>
+
+  <footer class="text-end pb-2">
+    SCO-LDC v4.0 / E Mullen ·
+    <a href="mailto:sco.sci@outlook.com?subject=SCO-LDC%20inquiry"
+       style="color: inherit; text-decoration: none;"
+       title="Email Ed Mullen">sco.sci@outlook.com</a>
+  </footer>
+
+</div>
+
+
+<div class="copy-toast" id="copyToast" role="status" aria-live="polite">Copied</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const form = $('form');
+const submitBtn = $('submitBtn');
+const statusEl = $('status');
+const lookupBtn = $('lookupBtn');
+const lookupStatusEl = $('lookupStatus');
+
+
+let FILTERS = [];
+let currentFilter = null;
+let currentModelEntry = null;
+
+
+let lookupBaseline = null;
+
+
+const PARAM_EQ_EPSILON = 1e-9;
+
+
+
+const LAW_CONFIG = {
+  quad: {
+    name: "Quadratic",
+    prefix: "/quad",
+    coeffs: [
+      { id: "c1", label: "u<sub>1</sub>", field: "u1" },
+      { id: "c2", label: "u<sub>2</sub>", field: "u2" },
+    ],
+    equation: "I(\u03bc) / I(1) = 1 \u2212 u<sub>1</sub>\u00b7(1\u2212\u03bc) \u2212 u<sub>2</sub>\u00b7(1\u2212\u03bc)\u00b2",
+    models: [["ATLAS", "ATLAS"], ["PHOENIX", "PHOENIX"]],
+    catOrder: ["Johnson-Cousins", "Sloan/SDSS", "Str\u00f6mgren", "Gaia", "Space-based", "Exoplanet"],
+  },
+  power2: {
+    name: "Power-2",
+    prefix: "/power2",
+    coeffs: [
+      { id: "c1", label: "<em>g</em>", field: "g" },
+      { id: "c2", label: "<em>h</em>", field: "h" },
+    ],
+    equation: "I(\u03bc) / I(1) = 1 \u2212 g\u00b7(1 \u2212 \u03bc<sup>h</sup>)",
+    models: [["ATLAS", "ATLAS"], ["PHOENIX-COND", "PHOENIX-COND"]],
+    catOrder: ["Johnson-Cousins", "Sloan/SDSS", "Str\u00f6mgren", "Gaia", "Space-based", "Exoplanet"],
+  },
+  fourparam: {
+    name: "Four-parameter",
+    prefix: "/fourparam",
+    coeffs: [
+      { id: "c1", label: "a<sub>1</sub>", field: "a1" },
+      { id: "c2", label: "a<sub>2</sub>", field: "a2" },
+      { id: "c3", label: "a<sub>3</sub>", field: "a3" },
+      { id: "c4", label: "a<sub>4</sub>", field: "a4" },
+    ],
+    equation: "I(\u03bc) / I(1) = 1 \u2212 a<sub>1</sub>(1\u2212\u03bc<sup>\u00bd</sup>) \u2212 a<sub>2</sub>(1\u2212\u03bc) \u2212 a<sub>3</sub>(1\u2212\u03bc<sup>3\u20442</sup>) \u2212 a<sub>4</sub>(1\u2212\u03bc\u00b2)",
+    models: [["ATLAS", "ATLAS"], ["PHOENIX", "PHOENIX"], ["PHOENIX-COND", "PHOENIX-COND"]],
+    catOrder: ["Johnson-Cousins", "Sloan/SDSS", "Str\u00f6mgren", "Gaia", "Space-based", "Exoplanet"],
+  },
+};
+
+let currentLaw = "quad";                 // default
+function lawCfg() { return LAW_CONFIG[currentLaw]; }
+function apiBase() { return lawCfg().prefix + "/api"; }
+
+// Apply all law-dependent UI: coefficient labels, equation, model options,
+// blurb. Then reload the filter list from the selected law's backend.
+async function applyLaw() {
+  const cfg = lawCfg();
+  // Coefficient labels + box visibility (2-coeff laws hide c3/c4; 4-param shows all).
+  const activeIds = new Set(cfg.coeffs.map(c => c.id));
+  ["c1", "c2", "c3", "c4"].forEach(id => {
+    const box = $(id + "_box");
+    if (box) box.style.display = activeIds.has(id) ? "" : "none";
+  });
+  cfg.coeffs.forEach(c => { const el = $(c.id + "_label"); if (el) el.innerHTML = c.label; });
+  // Equation (results panel)
+  const eq = $("lawEquation"); if (eq) eq.innerHTML = cfg.equation;
+  // (Top blurb and Methodology are static — shared for both laws — not swapped.)
+  // Model dropdown options
+  const modelSel = $("model");
+  if (modelSel) {
+    const prev = modelSel.value;
+    modelSel.innerHTML = "";
+    cfg.models.forEach(([val, label], i) => {
+      const opt = document.createElement("option");
+      opt.value = val; opt.textContent = label;
+      if (i === 0) opt.selected = true;
+      modelSel.appendChild(opt);
+    });
+  }
+  // Reload filters from the selected law's backend
+  await loadFilters();
+  clearResult();
+}
+
+async function loadFilters() {
+  try {
+    const resp = await fetch(apiBase() + '/filters');
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
+    FILTERS = data.filters;
+    const sel = $('filter');
+    sel.innerHTML = '';
+
+    // Blank default option — forces user to actively choose a filter.
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '— Select a filter —';
+    sel.appendChild(placeholder);
+
+    
+    const groups = new Map();
+    for (const f of FILTERS) {
+      if (!groups.has(f.category)) groups.set(f.category, []);
+      groups.get(f.category).push(f);
+    }
+    const catOrder = lawCfg().catOrder;
+    for (const cat of catOrder) {
+      if (!groups.has(cat)) continue;
+      const og = document.createElement('optgroup');
+      og.label = cat;
+      for (const f of groups.get(cat)) {
+        const opt = document.createElement('option');
+        opt.value = f.code;
+        opt.textContent = `${f.name} (${f.code})`;
+        og.appendChild(opt);
+      }
+      sel.appendChild(og);
+    }
+
+    
+    sel.value = '';
+
+    sel.addEventListener('change', onFilterChange);
+    $('model').addEventListener('change', onModelChange);
+    onFilterChange();
+    refreshHints();   // show the current model's bounds immediately on load
+  } catch (e) {
+    statusEl.textContent = 'Could not load filters: ' + e.message;
+    statusEl.classList.add('text-danger');
+  }
+}
+// Wire the law selector and initialize. applyLaw() calls loadFilters().
+$('law').addEventListener('change', async (ev) => {
+  currentLaw = ev.target.value;
+  await applyLaw();   // repopulate filter/model dropdowns for the new law
+  blankForm();        // then clear all inputs to a pristine state
+});
+applyLaw();
+
+
+function resolveModelEntry(filter, displayName) {
+  if (!filter) return null;
+  if (displayName === 'ATLAS') {
+    return filter.models.find(m => m.model === 'ATLAS') || null;
+  }
+  if (displayName === 'PHOENIX' || displayName === 'PHOENIX-COND') {
+    
+    return filter.models.find(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND') || null;
+  }
+  return null;
+}
+
+
+
+function activeBounds() {
+  // Bounds for the currently selected filter + model, or null if unavailable.
+  return currentModelEntry || null;
+}
+
+function filterHasModel(displayName) {
+  // True if the currently selected filter offers the given model.
+  if (!currentFilter) return false;
+  if (displayName === 'ATLAS') {
+    return currentFilter.models.some(m => m.model === 'ATLAS');
+  }
+  return currentFilter.models.some(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND');
+}
+
+function otherModelName() {
+  // The display name of the model NOT currently selected ('ATLAS' <-> 'PHOENIX').
+  return $('model').value === 'ATLAS' ? 'PHOENIX' : 'ATLAS';
+}
+
+function onFilterChange() {
+  const selectedCode = $('filter').value;
+
+  
+  if (!selectedCode) {
+    currentFilter = null;
+    currentModelEntry = null;
+    $('feh').disabled = false;
+    refreshHints();   // show the selected model's bounds (Option A), not blank
+    return;
+  }
+
+  currentFilter = FILTERS.find(f => f.code === selectedCode);
+  if (!currentFilter) return;
+
+  
+  const mSel = $('model');
+  const hasAtlas   = currentFilter.models.some(m => m.model === 'ATLAS');
+  const hasPhoenix = currentFilter.models.some(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND');
+  if (mSel.value === 'ATLAS' && !hasAtlas && hasPhoenix) {
+    mSel.value = 'PHOENIX';
+  } else if (mSel.value === 'PHOENIX' && !hasPhoenix && hasAtlas) {
+    mSel.value = 'ATLAS';
+  }
+
+  onModelChange();
+
+  
+  tryAutoCompute();
+}
+
+function onModelChange() {
+  if (!currentFilter) {
+    // No filter selected yet: still show the model's representative bounds.
+    currentModelEntry = null;
+    refreshHints();
+    return;
+  }
+  let entry = resolveModelEntry(currentFilter, $('model').value);
+
+  
+  if (!entry) {
+    const mSel = $('model');
+    const fallback = mSel.value === 'ATLAS' ? 'PHOENIX' : 'ATLAS';
+    entry = resolveModelEntry(currentFilter, fallback);
+    if (entry) mSel.value = fallback;
+  }
+
+  currentModelEntry = entry;
+  refreshHints();
+}
+
+function signed(v) { return (v >= 0 ? '+' : '') + Number(v).toFixed(1); }
+
+function updateHints() {
+  
+  refreshHints();
+}
+
+
+function representativeModelEntry(displayName) {
+  let best = null;
+  for (const f of FILTERS) {
+    const e = resolveModelEntry(f, displayName);
+    if (!e) continue;
+    if (!best || (e.logg_max - e.logg_min) > (best.logg_max - best.logg_min)) {
+      best = e;
+    }
+  }
+  return best;
+}
+
+function applyHintValues(e) {
+  if (!e) {
+    $('teffHint').textContent = '';
+    $('loggHint').textContent = '';
+    $('fehHint').textContent = '';
+    return;
+  }
+  $('teffHint').textContent = `${e.teff_min.toFixed(0)} – ${e.teff_max.toFixed(0)}`;
+  $('loggHint').textContent = `${e.logg_min.toFixed(1)} – ${e.logg_max.toFixed(1)}`;
+  if (e.feh_fixed) {
+    $('fehHint').textContent = `${signed(e.feh_min)} only (solar)`;
+  } else {
+    $('fehHint').textContent = `${signed(e.feh_min)} to ${signed(e.feh_max)}`;
+  }
+}
+
+function refreshHints() {
+  // Prefer the exact filter+model entry; fall back to a representative entry
+  // for the selected model when no filter is chosen yet.
+  let e = currentModelEntry;
+  if (!e) e = representativeModelEntry($('model').value);
+  applyHintValues(e);
+  // The feh field's disabled/solar-locked state follows the exact entry only
+  // (don't lock the field based on a representative entry before filter choice).
+  if (currentModelEntry && currentModelEntry.feh_fixed) {
+    $('feh').value = currentModelEntry.feh_min.toFixed(1);
+    $('feh').disabled = true;
+  } else if (currentModelEntry) {
+    $('feh').disabled = false;
+  }
+}
+
+function setBusy(on, msg) {
+  submitBtn.disabled = on;
+  if (on) {
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Computing…';
+    statusEl.textContent = msg || '';
+    statusEl.classList.remove('text-danger', 'text-success');
+    statusEl.classList.add('text-muted');
+  } else {
+    submitBtn.innerHTML = 'Compute LDCs';
+  }
+}
+
+
+function fieldMatchesBaseline(fieldValue, baselineValue) {
+  if (baselineValue === null || baselineValue === undefined) {
+   
+    return false;
+  }
+  const cur = parseFloat(fieldValue);
+  if (isNaN(cur)) return false;
+  return Math.abs(cur - baselineValue) < PARAM_EQ_EPSILON;
+}
+
+
+function paramsMatchBaseline() {
+  if (lookupBaseline === null) return false;
+
+  if (!fieldMatchesBaseline($('teff').value, lookupBaseline.teff)) return false;
+  if (!fieldMatchesBaseline($('logg').value, lookupBaseline.logg)) return false;
+
+  
+  if (!$('feh').disabled && !lookupBaseline.feh_was_disabled) {
+    if (!fieldMatchesBaseline($('feh').value, lookupBaseline.feh)) return false;
+  }
+
+  return true;
+}
+
+
+
+function hasSolarMismatch() {
+  if (!$('feh').disabled) return false;
+  if (lookupBaseline === null) return false;
+  if (typeof lookupBaseline.feh !== 'number') return false;
+  if (Math.abs(lookupBaseline.feh) < 0.05) return false;
+  const teff = lookupBaseline.teff;
+  if (typeof teff !== 'number') return false;
+  
+  const atlasEntry = currentFilter
+    ? currentFilter.models.find(m => m.model === 'ATLAS')
+    : null;
+  if (!atlasEntry) return false;
+  if (teff < atlasEntry.teff_min) return false;
+  return true;
+}
+
+
+function isLookupBaselineLoggUnsupported() {
+  if (lookupBaseline === null) return false;
+  const b = activeBounds();
+  if (!b) return false;
+  return typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > b.logg_max;
+}
+
+
+function renderUnsupportedLoggMessage() {
+  lookupStatusEl.querySelectorAll('.text-danger').forEach(el => el.remove());
+  const b = activeBounds();
+  const limit = b ? b.logg_max.toFixed(1) : '5.0';
+  addLookupLine(
+    `This target is not supported because its value of Log(g) is above the limits of the supported tables (${limit}).`,
+    'text-danger',
+  );
+}
+
+
+function renderLookupModelContext() {
+  
+  lookupStatusEl.querySelectorAll('.lookup-model-context').forEach(el => el.remove());
+
+  if (lookupBaseline === null) return;
+  const _b = activeBounds();
+  if (_b && typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > _b.logg_max) return;
+
+  if (!hasGridIncompatibility()) {
+    const sourceLabel = lookupBaseline.source === 'NEA'
+      ? 'NASA Exoplanet Archive Composite Parameters'
+      : (lookupBaseline.source === 'ExoFOP'
+          ? 'ExoFOP-TESS'
+          : lookupBaseline.source || 'unknown');
+    const citationDetail = lookupBaseline.citation ? `, ${lookupBaseline.citation}` : '';
+    const div = document.createElement('div');
+    div.className = 'lookup-line text-muted lookup-model-context';
+    div.textContent = `Source: ${sourceLabel}${citationDetail}`;
+    lookupStatusEl.appendChild(div);
+  }
+
+  if ($('model').value === 'PHOENIX'
+      && typeof lookupBaseline.feh === 'number'
+      && Math.abs(lookupBaseline.feh) >= 0.05) {
+    const atlasFeasible = typeof lookupBaseline.teff === 'number' && lookupBaseline.teff >= 3500;
+    if (!atlasFeasible) {
+      const div = document.createElement('div');
+      div.className = 'lookup-line text-muted lookup-model-context';
+      div.textContent = `The PHOENIX subset supports only solar metallicity at this Teff. [Fe/H] = ${lookupBaseline.feh.toFixed(3)} has been treated as 0.0 for LDC computation.`;
+      lookupStatusEl.appendChild(div);
+    }
+  }
+}
+
+
+function hasGridIncompatibility() {
+  if (hasSolarMismatch()) return true;
+  if (lookupBaseline === null) return false;
+  const b = activeBounds();
+  if (!b) return false;
+  const teff = lookupBaseline.teff;
+  const logg = lookupBaseline.logg;
+  if (typeof logg === 'number' && (logg > b.logg_max || logg < b.logg_min)) return true;
+  if (typeof teff === 'number' && (teff > b.teff_max || teff < b.teff_min)) return true;
+  return false;
+}
+
+
+function tryAutoCompute() {
+  if (!$('filter').value) return;
+  if (!$('teff').value.trim()) return;
+  if (!$('logg').value.trim()) return;
+  if (!$('feh').value.trim()) return;
+  if (hasGridIncompatibility()) {
+    renderLookupModelContext();
+    return;
+  }
+  form.requestSubmit();
+}
+
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+
+  
+  if (!currentFilter || !currentModelEntry) {
+    statusEl.textContent = 'Please select a filter.';
+    statusEl.classList.remove('text-success', 'text-muted');
+    statusEl.classList.add('text-danger');
+    $('filter').focus();
+    clearResult();
+    return;
+  }
+
+  
+  if (hasSolarMismatch()) {
+    statusEl.textContent = 'Cannot compute: the selected grid is solar-metallicity only, '
+      + 'but the planet\u2019s [Fe/H] is non-zero. Switch to the ATLAS model and rerun '
+      + 'planet Lookup.';
+    statusEl.classList.remove('text-success', 'text-muted');
+    statusEl.classList.add('text-danger');
+    clearResult();
+    return;
+  }
+
+  
+  const required = [
+    { id: 'teff', label: 'T_eff' },
+    { id: 'logg', label: 'log(g)' },
+    { id: 'feh',  label: '[Fe/H]' },
+  ];
+  const missing = required.filter(f => !$(f.id).value.trim());
+  if (missing.length > 0) {
+    const labels = missing.map(f => f.label).join(', ');
+    statusEl.textContent = missing.length === 1
+      ? `Please fill in the ${labels} field.`
+      : `Please fill in these fields: ${labels}.`;
+    statusEl.classList.remove('text-success', 'text-muted');
+    statusEl.classList.add('text-danger');
+    $(missing[0].id).focus();
+    clearResult();
+    return;
+  }
+
+ 
+  if (!paramsMatchBaseline()) {
+    $('planetName').value = '';
+    clearLookupStatus();
+    lookupBaseline = null;
+  }
+
+  
+  if (isLookupBaselineLoggUnsupported()) {
+    renderUnsupportedLoggMessage();
+    statusEl.textContent = '';
+    statusEl.classList.remove('text-danger', 'text-success');
+    statusEl.classList.add('text-muted');
+    $('computeResultMessage').textContent = '';
+    clearResult();
+    return;
+  }
+
+  const params = new URLSearchParams({
+    teff:   $('teff').value,
+    logg:   $('logg').value,
+    feh:    $('feh').value,
+    filter: currentFilter.code,
+    model:  currentModelEntry.model,
+  });
+
+  setBusy(true, '');
+  clearResult();
+
+  
+  lookupStatusEl.querySelectorAll('.text-danger').forEach(el => el.remove());
+  $('computeResultMessage').textContent = '';
+  renderLookupModelContext();
+
+  try {
+    const resp = await fetch(apiBase() + '/compute?' + params.toString());
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+    showResult(data);
+    $('computeResultMessage').textContent = 'Calculated';
+    statusEl.textContent = '';
+    statusEl.classList.remove('text-danger', 'text-muted', 'text-success');
+  } catch (e) {
+    statusEl.textContent = e.message;
+	
+    statusEl.classList.remove('text-success', 'text-muted');
+    statusEl.classList.add('text-danger');
+    clearResult();
+  } finally {
+    setBusy(false);
+  }
+});
+
+function fmt(x) {
+  return x.toFixed(4);
+}
+
+function renderDerived(d) {
+  const panel = $('derivedPanel');
+  const hdr   = $('tabPanelHdr');
+  const warn  = $('maxtedWarn');
+  // MAXTED DISPLAY DISABLED — see the commented-out #derivedPanel markup above.
+  // The backend still returns h1, h2 and maxted_valid; we simply do not render
+  // them. Setting `show` to false keeps this function (and its callers) intact
+  // and makes the panel, its header, and the warning stay hidden.
+  //
+  // TO RESTORE: replace the line below with the original guard --
+  //   const show = (currentLaw === 'power2' && d && d.h1 != null && d.h2 != null);
+  const show = false;
+  if (hdr)   hdr.style.display   = show ? '' : 'none';
+  if (panel) panel.style.display = show ? '' : 'none';
+  if (!show) return;
+  $('d1').textContent = fmt(d.h1);
+  $('d1').classList.remove('placeholder-dash');
+  $('d2').textContent = fmt(d.h2);
+  $('d2').classList.remove('placeholder-dash');
+  if (warn) warn.style.display = (d.maxted_valid === false) ? '' : 'none';
+}
+
+function clearDerived() {
+  const panel = $('derivedPanel');
+  const hdr   = $('tabPanelHdr');
+  const warn  = $('maxtedWarn');
+  if (panel) panel.style.display = 'none';
+  if (hdr)   hdr.style.display   = 'none';
+  if (warn)  warn.style.display  = 'none';
+  ['d1','d2'].forEach(id => {
+    const e = $(id);
+    if (e) { e.textContent = '—'; e.classList.add('placeholder-dash'); }
+  });
+}
+
+function showResult(d) {
+  lawCfg().coeffs.forEach(c => {
+    const el = $(c.id);
+    el.textContent = fmt(d[c.field]);
+    el.classList.remove('placeholder-dash');
+  });
+  renderDerived(d);
+  $('m_filter').textContent = `${d.filter_name} (${d.filter_code})`;
+  $('m_model').textContent  = d.model;
+  $('m_method').textContent = (d.grid && d.grid.on_grid) ? 'Direct table value (on grid)' : 'Trilinear interpolation';
+  $('m_source').textContent = d.citation || '—';
+  $('copyBtn').hidden = false;
+}
+
+function clearResult() {
+  lawCfg().coeffs.forEach(c => {
+    $(c.id).textContent = '—';
+    $(c.id).classList.add('placeholder-dash');
+  });
+  clearDerived();
+  ['m_filter','m_model','m_method','m_source'].forEach(id => $(id).textContent = '—');
+  $('copyBtn').hidden = true;
+}
+
+
+
+const COPY_FEEDBACK_MS = 1400;
+
+function showCopyToast(message, isError) {
+  const toast = $('copyToast');
+  toast.textContent = message;
+  toast.style.background = isError ? '#a94442' : '#1d7a3e';
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), COPY_FEEDBACK_MS);
+}
+
+$('copyBtn').addEventListener('click', async () => {
+  const btn = $('copyBtn');
+  const label = $('copyBtnLabel');
+  // Law-aware: read whichever coefficient boxes the current law uses
+  // (2 for quadratic/power-2, 4 for four-parameter). Mirrors showResult().
+  const values = lawCfg().coeffs.map(c => $(c.id).textContent.trim());
+  if (values.length === 0 || values.some(v => v === '—')) return;
+  let text;
+  if (currentLaw === 'power2') {
+    // Power-2 coefficients are labelled because g and h are not interchangeable.
+    //
+    // MAXTED DISPLAY DISABLED — the h1/h2 values are no longer shown in the UI,
+    // so they are not appended to the copied text either.
+    // TO RESTORE: re-add the two lines below and the append that followed --
+    //   const d1v = $('d1').textContent.trim();
+    //   const d2v = $('d2').textContent.trim();
+    //   if (d1v !== '—' && d2v !== '—') text += ` h1=${d1v} h2=${d2v}`;
+    text = `g=${values[0]} h=${values[1]}`;
+  } else {
+    text = values.join('   ');
+  }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (!ok) throw new Error('execCommand copy failed');
+    }
+    btn.classList.add('copied-feedback');
+    label.textContent = 'Copy';
+    setTimeout(() => {
+      btn.classList.remove('copied-feedback');
+      label.textContent = 'Copy';
+    }, COPY_FEEDBACK_MS);
+  } catch (e) {
+    showCopyToast('Copy failed: ' + e.message, true);
+  }
+});
+
+$('exampleBtn').addEventListener('click', () => {
+  
+  
+  $('planetName').value = '';
+  clearLookupStatus();
+  lookupBaseline = null;
+  $('teff').value = 5778;
+  $('logg').value = 4.44;
+  if (!$('feh').disabled) $('feh').value = 0.0;
+  $('model').value = 'ATLAS';
+  $('filter').value = 'u*';
+  onFilterChange();
+  statusEl.textContent = '';
+  statusEl.classList.remove('text-danger', 'text-success');
+  statusEl.classList.add('text-muted');
+});
+
+function blankForm() {
+  $('teff').value = '';
+  $('logg').value = '';
+  $('feh').value = '';
+  $('filter').value = '';
+  $('model').value = 'ATLAS';
+  onFilterChange();
+  $('planetName').value = '';
+  clearLookupStatus();
+  lookupBaseline = null;
+  clearResult();
+  statusEl.textContent = '';
+  statusEl.classList.remove('text-danger', 'text-success');
+  statusEl.classList.add('text-muted');
+  $('computeResultMessage').textContent = '';
+}
+
+$('clearBtn').addEventListener('click', () => {
+  blankForm();
+});
+
+
+
+function clearLookupStatus() {
+  lookupStatusEl.innerHTML = '';
+  lookupStatusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+}
+
+
+function clearParameterFieldsForLookup() {
+  $('teff').value = '';
+  $('logg').value = '';
+  if (!$('feh').disabled) $('feh').value = '';
+}
+
+function setLookupBusy(on) {
+  lookupBtn.disabled = on;
+  if (on) {
+    lookupBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Looking up…';
+  } else {
+    lookupBtn.innerHTML = 'Look up';
+  }
+}
+
+
+function makeSuggestionLink(name) {
+  const a = document.createElement('a');
+  a.href = '#';
+  a.className = 'suggestion-link';
+  a.textContent = name;
+  a.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    $('planetName').value = name;
+    doLookup();
+  });
+  return a;
+}
+
+
+function renderSuggestions(suggestions) {
+  if (!suggestions || suggestions.length === 0) return null;
+  const wrap = document.createElement('span');
+  wrap.appendChild(document.createTextNode('Did you mean '));
+  suggestions.forEach((name, i) => {
+    wrap.appendChild(makeSuggestionLink(name));
+    if (i < suggestions.length - 2) {
+      wrap.appendChild(document.createTextNode(', '));
+    } else if (i === suggestions.length - 2) {
+      wrap.appendChild(document.createTextNode(suggestions.length === 2 ? ' or ' : ', or '));
+    }
+  });
+  wrap.appendChild(document.createTextNode('?'));
+  return wrap;
+}
+
+function addLookupLine(text, className) {
+  const div = document.createElement('div');
+  div.className = 'lookup-line';
+  if (className) div.classList.add(className);
+  if (typeof text === 'string') {
+    div.textContent = text;
+  } else {
+    div.appendChild(text);
+  }
+  lookupStatusEl.appendChild(div);
+}
+
+async function doLookup() {
+  const planet = $('planetName').value.trim();
+  if (!planet) {
+    clearLookupStatus();
+    addLookupLine('Enter a planet name or TOI to look up.', 'text-muted');
+    return;
+  }
+
+ 
+  clearLookupStatus();
+  clearParameterFieldsForLookup();
+  clearResult();
+  lookupBaseline = null;
+  statusEl.textContent = '';
+  statusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+  $('computeResultMessage').textContent = '';
+
+  setLookupBusy(true);
+
+  let data;
+  try {
+    const resp = await fetch(apiBase() + '/resolve?planet=' + encodeURIComponent(planet));
+    data = await resp.json();
+  } catch (e) {
+    addLookupLine('Lookup failed: ' + e.message, 'text-danger');
+    setLookupBusy(false);
+    return;
+  } finally {
+    setLookupBusy(false);
+  }
+
+ 
+  if (data.reason === 'error') {
+    addLookupLine('Lookup error: ' + (data.error || 'unknown error'), 'text-danger');
+    return;
+  }
+
+  // TIC input: show ONLY the dedicated message. No "not found" line and no
+  // "Did you mean ...?" suggestion -- a TIC can host more than one TOI, so any
+  // single suggested TOI would be a guess, and the name-similarity matcher can
+  // otherwise return a lexically similar but astronomically unrelated TOI.
+  if (data.reason === 'tic_not_supported') {
+    addLookupLine(data.message || 'TIC name format not supported, please enter equivalent TOI name.',
+                  'text-danger');
+    return;
+  }
+
+  
+  if (data.found !== true) {
+    addLookupLine(`Name: ${planet} not found.`, 'text-danger');
+    const sugg = renderSuggestions(data.suggestions);
+    if (sugg) addLookupLine(sugg, 'text-muted');
+    return;
+  }
+
+  
+  if (data.planet) {
+    $('planetName').value = data.planet;
+  }
+
+  
+  const foundLabels = [];
+  const missingLabels = [];
+
+  populateParameterValue('teff', data.teff);
+  if (typeof data.teff === 'number') {
+    foundLabels.push('Teff');
+  } else {
+    missingLabels.push('Teff');
+  }
+
+  populateParameterValue('logg', data.logg);
+  if (typeof data.logg === 'number') {
+    foundLabels.push('log(g)');
+  } else {
+    missingLabels.push('log(g)');
+  }
+
+  populateParameterValue('feh', data.feh);
+  let fehSubstituted = false;
+  if (!$('feh').disabled) {
+    if (typeof data.feh === 'number') {
+      foundLabels.push('[Fe/H]');
+    } else {
+      
+      $('feh').value = '0.0';
+      fehSubstituted = true;
+    }
+  }
+
+  
+  lookupBaseline = {
+    planet: data.planet,
+    teff: (typeof data.teff === 'number') ? data.teff : null,
+    logg: (typeof data.logg === 'number') ? data.logg : null,
+    feh:  (typeof data.feh  === 'number') ? data.feh  : (fehSubstituted ? 0.0 : null),
+    feh_was_disabled: $('feh').disabled,
+    source: data.source,
+    citation: data.citation,
+  };
+
+  
+  const summary = buildFoundSummary(foundLabels, missingLabels, data.planet);
+  if (summary) addLookupLine(summary, 'text-muted');
+
+  
+  if (fehSubstituted) {
+    const noteDiv = document.createElement('div');
+    noteDiv.className = 'lookup-line text-muted feh-substitution-note';
+    noteDiv.textContent = '[Fe/H] = 0.0 substituted for blank return value.';
+    lookupStatusEl.appendChild(noteDiv);
+  }
+
+  
+  renderLookupModelContext();
+
+  
+  if (isLookupBaselineLoggUnsupported()) {
+    renderUnsupportedLoggMessage();
+    return;
+  }
+
+  const _lb = activeBounds();
+
+  
+  if (_lb && typeof data.teff === 'number' && data.teff < _lb.teff_min) {
+    const alt = filterHasModel('PHOENIX') && $('model').value === 'ATLAS'
+      ? ' Switch to PHOENIX model.' : '';
+    addLookupLine(
+      `The ${$('model').value === 'ATLAS' ? 'ATLAS' : currentModelEntry.model} model does not support Teff below ${_lb.teff_min.toFixed(0)} K.${alt}`,
+      'text-danger',
+    );
+  }
+
+  
+  if (_lb) {
+    if (typeof data.teff === 'number' && data.teff > _lb.teff_max) {
+      const alt = filterHasModel('ATLAS') && $('model').value === 'PHOENIX'
+        ? ' Switch to ATLAS model.' : '';
+      addLookupLine(
+        `The ${currentModelEntry.model} model does not support Teff above ${_lb.teff_max.toFixed(0)} K.${alt}`,
+        'text-danger',
+      );
+    }
+    if (typeof data.logg === 'number' && data.logg < _lb.logg_min) {
+      const alt = filterHasModel('ATLAS') && $('model').value === 'PHOENIX'
+        ? ' Switch to ATLAS model.' : '';
+      addLookupLine(
+        `The ${currentModelEntry.model} model does not support Log(g) below ${_lb.logg_min.toFixed(1)}.${alt}`,
+        'text-danger',
+      );
+    }
+    if ($('model').value === 'PHOENIX'
+        && typeof data.feh === 'number' && Math.abs(data.feh) >= 0.05) {
+     
+      const atlasEntry = currentFilter.models.find(m => m.model === 'ATLAS');
+      const atlasFeasible = atlasEntry && typeof data.teff === 'number'
+        && data.teff >= atlasEntry.teff_min;
+      if (atlasFeasible) {
+        addLookupLine(
+          'The PHOENIX model does not support non-zero [Fe/H]. Switch to ATLAS model and rerun planet Lookup.',
+          'text-danger',
+        );
+      }
+    }
+  }
+
+ 
+  tryAutoCompute();
+}
+
+
+function populateParameterValue(fieldId, value) {
+  const el = $(fieldId);
+  if (value === null || value === undefined) {
+    if (!el.disabled) el.value = '';
+  } else {
+    if (!el.disabled) el.value = value;
+  }
+}
+
+
+function joinLabels(labels) {
+  return labels.join(', ');
+}
+
+
+function buildFoundSummary(foundLabels, missingLabels, planetName) {
+  if (missingLabels.length === 0) return null;
+  const missingPhrase = `${joinLabels(missingLabels)} not found for ${planetName}.`;
+  if (foundLabels.length === 0) return missingPhrase;
+  return `${joinLabels(foundLabels)} found. ${missingPhrase}`;
+}
+
+lookupBtn.addEventListener('click', doLookup);
+
+
+$('planetName').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') {
+    ev.preventDefault();
+    doLookup();
+  }
+});
+
+</script>
+
+</body>
+</html>
