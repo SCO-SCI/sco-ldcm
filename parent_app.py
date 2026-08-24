@@ -115,7 +115,9 @@ app.add_api_route("/api/compute", _quad_compute, methods=["GET"])
 app.add_api_route("/api/resolve", _quad_resolve, methods=["GET"])
 
 if os.path.isdir(STATIC_DIR) and os.path.exists(os.path.join(STATIC_DIR, "index.html")):
-    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static_legacy")
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static") 
+    
 else:
     @app.get("/")
     def _placeholder():
