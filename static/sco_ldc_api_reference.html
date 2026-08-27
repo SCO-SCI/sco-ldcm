@@ -4,7 +4,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SCO-LDC API Reference (merged)</title>
-<meta name="description" content="HTTP/JSON API reference for sco-ldc: quadratic and power-2 limb-darkening coefficients and exoplanet host-star parameter resolution.">
+<meta name="description" content="HTTP/JSON API reference for sco-ldc: quadratic, power-2, and four-parameter limb-darkening coefficients and exoplanet host-star parameter resolution.">
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -193,9 +193,10 @@
     stellar limb-darkening coefficients by trilinear interpolation of published Claret and
     Claret &amp; Southworth coefficient tables, and that resolves exoplanet names to host-star
     stellar parameters from the NASA Exoplanet Archive (NEA) and ExoFOP-TESS. The service supports
-    two limb-darkening laws, each reached through its own path prefix: the <strong>quadratic</strong>
-    law (coefficients u<sub>1</sub>, u<sub>2</sub>) and the <strong>power-2</strong> law
-    (coefficients g, h).
+    three limb-darkening laws, each reached through its own path prefix: the <strong>quadratic</strong>
+    law (coefficients u<sub>1</sub>, u<sub>2</sub>), the <strong>power-2</strong> law
+    (coefficients g, h), and the <strong>four-parameter</strong> law
+    (coefficients a<sub>1</sub>, a<sub>2</sub>, a<sub>3</sub>, a<sub>4</sub>).
   </p>
   <p class="mb-2">
     This reference is language-neutral and intended for any HTTP client (Java, JavaScript, Python, curl, etc.).
@@ -235,6 +236,7 @@
       <tbody>
         <tr><td>Quadratic</td><td><code>/quad/api/&hellip;</code></td><td>u<sub>1</sub>, u<sub>2</sub></td></tr>
         <tr><td>Power-2</td><td><code>/power2/api/&hellip;</code></td><td>g, h</td></tr>
+        <tr><td>Four-parameter</td><td><code>/fourparam/api/&hellip;</code></td><td>a<sub>1</sub>, a<sub>2</sub>, a<sub>3</sub>, a<sub>4</sub></td></tr>
       </tbody>
     </table>
     <p class="mb-2">In addition, the unprefixed paths <code>/api/health</code>, <code>/api/filters</code>,
@@ -313,19 +315,20 @@
         <tr><td><span class="method">GET</span> <code>/api/compute</code></td><td>Compute (u<sub>1</sub>, u<sub>2</sub>) &mdash; quadratic; legacy alias</td></tr>
         <tr><td><span class="method">GET</span> <code>/quad/api/&hellip;</code></td><td>Quadratic law (health, filters, resolve, compute &rarr; u<sub>1</sub>, u<sub>2</sub>)</td></tr>
         <tr><td><span class="method">GET</span> <code>/power2/api/&hellip;</code></td><td>Power-2 law (health, filters, resolve, compute &rarr; g, h)</td></tr>
+        <tr><td><span class="method">GET</span> <code>/fourparam/api/&hellip;</code></td><td>Four-parameter law (health, filters, resolve, compute &rarr; a<sub>1</sub>, a<sub>2</sub>, a<sub>3</sub>, a<sub>4</sub>)</td></tr>
       </tbody>
     </table>
     <p class="mb-2">The unprefixed <code>/api/&hellip;</code> endpoints are the legacy quadratic alias and are
     identical to <code>/quad/api/&hellip;</code>. Within each law prefix, the four endpoints
     (<code>health</code>, <code>filters</code>, <code>resolve</code>, <code>compute</code>) have the same shapes
     documented below; only the coefficient fields of <code>compute</code> differ by law
-    (u<sub>1</sub>, u<sub>2</sub> for quadratic; g, h for power-2). The <code>resolve</code> endpoint is
+    (u<sub>1</sub>, u<sub>2</sub> for quadratic; g, h for power-2; a<sub>1</sub>, a<sub>2</sub>, a<sub>3</sub>, a<sub>4</sub> for four-parameter). The <code>resolve</code> endpoint is
     law-independent &mdash; it returns host-star parameters and is identical under every prefix.</p>
     <h3>Typical integration flow</h3>
     <ol class="flow">
       <li><strong>(Optional, at startup or once per session.)</strong> Call <code>/api/filters</code> (or <code>/&lt;law&gt;/api/filters</code>) once to discover what filters and models are available, with their grid ranges. Cache the result locally.</li>
       <li><strong>(Optional, per target.)</strong> Call <code>/api/resolve?planet=&lt;NAME&gt;</code> to fetch host-star T<sub>eff</sub>/logg/[Fe/H] from a planet or TOI name.</li>
-      <li><strong>(Per LDC requested.)</strong> Call <code>/api/compute?&hellip;</code> for quadratic u<sub>1</sub>, u<sub>2</sub>, or <code>/power2/api/compute?&hellip;</code> for power-2 g, h.</li>
+      <li><strong>(Per LDC requested.)</strong> Call <code>/api/compute?&hellip;</code> for quadratic u<sub>1</sub>, u<sub>2</sub>, <code>/power2/api/compute?&hellip;</code> for power-2 g, h, or <code>/fourparam/api/compute?&hellip;</code> for four-parameter a<sub>1</sub>, a<sub>2</sub>, a<sub>3</sub>, a<sub>4</sub>.</li>
     </ol>
   </section>
 
@@ -452,7 +455,7 @@
       <li>Filter codes are case-sensitive. In particular, lowercase letters distinguish Str&ouml;mgren from uppercase Johnson: &ldquo;V&rdquo; is Johnson V; &ldquo;v&rdquo; is Str&ouml;mgren v. SDSS codes use a trailing asterisk: u*, g*, r*, i*, z*.</li>
       <li>The complete current list of codes is: U, B, V, R, I, J, H, K, u, v, b, y, u*, g*, r*, i*, z*, Kp, C, S1, S2, S3, S4, TESS, CBB, CHEOPS.</li>
       <li>The <code>model</code> parameter to <code>/api/compute</code> accepts the display name from the model field. Accepted values are &lsquo;ATLAS&rsquo;, &lsquo;PHOENIX&rsquo;, and &lsquo;PHOENIX-COND&rsquo;. Not every filter supports every model; the models array per filter is the authoritative list.</li>
-      <li>This catalog (via the unprefixed <code>/api/filters</code> or <code>/quad/api/filters</code>) is the quadratic filter set. The power-2 law has its own catalog at <code>/power2/api/filters</code> with a different filter set (it adds the Gaia bands and omits CoRoT and Spitzer) and its own model coverage. Query the catalog under the prefix of the law you intend to use.</li>
+      <li>This catalog (via the unprefixed <code>/api/filters</code> or <code>/quad/api/filters</code>) is the quadratic filter set. The power-2 law has its own catalog at <code>/power2/api/filters</code> with a different filter set (it adds the Gaia bands and omits CoRoT and Spitzer) and its own model coverage. The four-parameter law has its own catalog at <code>/fourparam/api/filters</code> as well (it includes the Gaia bands and the CoRoT and Spitzer bands, but omits CBB). Query the catalog under the prefix of the law you intend to use.</li>
       <li>When the <code>feh_fixed</code> flag is true, passing a feh value other than 0.0 to <code>/api/compute</code> will be rejected. The default feh=0.0 works correctly.</li>
     </ul>
   </section>
@@ -552,15 +555,16 @@
 
   <!-- 7. COMPUTE -->
   <section id="compute" class="doc-sec">
-    <h2><span class="sec-num">7</span>GET compute (quadratic and power-2)</h2>
-    <div class="endpoint-head"><span class="method">GET</span><span class="endpoint-path">/api/compute &middot; /quad/api/compute &middot; /power2/api/compute</span></div>
+    <h2><span class="sec-num">7</span>GET compute (quadratic, power-2, and four-parameter)</h2>
+    <div class="endpoint-head"><span class="method">GET</span><span class="endpoint-path">/api/compute &middot; /quad/api/compute &middot; /power2/api/compute &middot; /fourparam/api/compute</span></div>
     <p class="mb-2">Computes limb-darkening coefficients by trilinear interpolation of the coefficient table
     corresponding to the requested filter and atmosphere model. This is the main computational endpoint.
-    The request parameters are the same for both laws; the response differs only in the coefficient fields.
+    The request parameters are the same for all three laws; the response differs only in the coefficient fields.
     Use <code>/api/compute</code> or <code>/quad/api/compute</code> for the quadratic law
-    (u<sub>1</sub>, u<sub>2</sub>), and <code>/power2/api/compute</code> for the power-2 law (g, h).</p>
+    (u<sub>1</sub>, u<sub>2</sub>), <code>/power2/api/compute</code> for the power-2 law (g, h), and
+    <code>/fourparam/api/compute</code> for the four-parameter law (a<sub>1</sub>, a<sub>2</sub>, a<sub>3</sub>, a<sub>4</sub>).</p>
 
-    <h3>Required parameters (both laws)</h3>
+    <h3>Required parameters (all three laws)</h3>
     <table class="api">
       <thead><tr><th style="width:16%;">Name</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
       <tbody>
@@ -647,10 +651,40 @@
       </tbody>
     </table>
 
+    <h3>Four-parameter response on success (HTTP 200) &mdash; <code>/fourparam/api/compute</code></h3>
+    <pre class="code">{
+  <span class="c-key">"a1"</span>: <span class="c-num">0.4691</span>,
+  <span class="c-key">"a2"</span>: <span class="c-num">0.3719</span>,
+  <span class="c-key">"a3"</span>: <span class="c-num">-0.1268</span>,
+  <span class="c-key">"a4"</span>: <span class="c-num">0.0217</span>,
+  <span class="c-key">"filter_code"</span>: <span class="c-str">"V"</span>,
+  <span class="c-key">"filter_name"</span>: <span class="c-str">"Johnson V"</span>,
+  <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>,
+  <span class="c-key">"citation"</span>: <span class="c-str">"Claret &amp; Bloemen (2011, A&amp;A 529, A75)"</span>,
+  <span class="c-key">"grid"</span>: { <span class="c-str">&hellip; same structure as the quadratic response &hellip;</span> }
+}</pre>
+    <p class="mb-2" style="color:#4c555d;">The four-parameter response is identical in shape to the quadratic and power-2 responses except
+    that the tabulated coefficient fields are <code>a1</code>, <code>a2</code>, <code>a3</code>, and <code>a4</code>
+    (the four non-linear coefficients) rather than <code>u1</code>/<code>u2</code> or <code>g</code>/<code>h</code>.
+    All other fields (<code>filter_code</code>, <code>filter_name</code>, <code>model</code>, <code>citation</code>,
+    and the <code>grid</code> block) have the same meaning as documented above. (Numeric values are illustrative.)</p>
+
+    <h3>Four-parameter response fields</h3>
+    <table class="api mb-2">
+      <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>a1</code></td><td><span class="type">number</span></td><td>First four-parameter coefficient (term in 1&minus;&mu;<sup>1/2</sup>)</td></tr>
+        <tr><td><code>a2</code></td><td><span class="type">number</span></td><td>Second four-parameter coefficient (term in 1&minus;&mu;)</td></tr>
+        <tr><td><code>a3</code></td><td><span class="type">number</span></td><td>Third four-parameter coefficient (term in 1&minus;&mu;<sup>3/2</sup>)</td></tr>
+        <tr><td><code>a4</code></td><td><span class="type">number</span></td><td>Fourth four-parameter coefficient (term in 1&minus;&mu;<sup>2</sup>)</td></tr>
+      </tbody>
+    </table>
+
     <h3>Citation strings by source</h3>
     <ul class="notes">
       <li><strong>Quadratic:</strong> CB2011 filters &lsquo;Claret &amp; Bloemen (2011, A&amp;A 529, A75)&rsquo;; C2018 (TESS) &lsquo;Claret (2018, A&amp;A 618, A20)&rsquo;; C2021 (CHEOPS) &lsquo;Claret (2021, RNAAS 5, 13)&rsquo;; CMG2022 (CBB) &lsquo;Claret, Mullen &amp; Gary (2022, RNAAS 6, 169)&rsquo;.</li>
       <li><strong>Power-2:</strong> ATLAS &lsquo;Claret &amp; Southworth (2022, A&amp;A 664, A128)&rsquo;; PHOENIX-COND &lsquo;Claret &amp; Southworth (2023, A&amp;A 674, A63)&rsquo;; CBB power-2 table (ATLAS).</li>
+      <li><strong>Four-parameter:</strong> ATLAS &lsquo;Claret &amp; Bloemen (2011, A&amp;A 529, A75)&rsquo;; PHOENIX-COND &lsquo;Claret &amp; Southworth (2023, A&amp;A 674, A63)&rsquo;; CoRoT and Spitzer PHOENIX use the 2011 PHOENIX models from Claret &amp; Bloemen (2011).</li>
     </ul>
 
     <h3>Notes specific to the power-2 law</h3>
@@ -659,6 +693,16 @@
       <li>CHEOPS is available for PHOENIX-COND only; CBB is available for ATLAS only. All other power-2 filters support both models.</li>
       <li>Power-2 adds the Gaia bands (G, G_BP, G_RP); it does not include the CoRoT or Spitzer bands that the quadratic law offers.</li>
       <li>The PHOENIX-COND power-2 coefficients use the M2 (midpoint) truncation method.</li>
+    </ul>
+
+    <h3>Notes specific to the four-parameter law</h3>
+    <ul class="notes">
+      <li>The four-parameter law returns four coefficients (a<sub>1</sub>&ndash;a<sub>4</sub>) for Claret&rsquo;s non-linear law I(&mu;)/I(1) = 1 &minus; a<sub>1</sub>(1&minus;&mu;<sup>1/2</sup>) &minus; a<sub>2</sub>(1&minus;&mu;) &minus; a<sub>3</sub>(1&minus;&mu;<sup>3/2</sup>) &minus; a<sub>4</sub>(1&minus;&mu;<sup>2</sup>).</li>
+      <li>Four-parameter supports models ATLAS and PHOENIX-COND. ATLAS spans all tabulated metallicities; PHOENIX-COND is solar metallicity only.</li>
+      <li>ATLAS coefficients come from Claret &amp; Bloemen (2011); PHOENIX-COND coefficients come from Claret &amp; Southworth (2023) for every band they cover.</li>
+      <li>The Gaia bands (G, G_BP, G_RP), TESS, and CHEOPS are available for PHOENIX-COND only. CoRoT is available in ATLAS and in the older 2011 PHOENIX models (reported as model &lsquo;PHOENIX&rsquo;, not &lsquo;PHOENIX-COND&rsquo;). The Spitzer IRAC bands are ATLAS only. The four-parameter law does not include the CBB filter.</li>
+      <li>Requesting model &lsquo;PHOENIX&rsquo; or &lsquo;PHOENIX-COND&rsquo; returns the same grid for a given filter; the two strings are accepted interchangeably on input, and the returned <code>model</code> field reflects the grid&rsquo;s own label (&lsquo;PHOENIX-COND&rsquo; for the Claret &amp; Southworth 2023 bands, plain &lsquo;PHOENIX&rsquo; for CoRoT).</li>
+      <li>a<sub>1</sub>&ndash;a<sub>4</sub> are returned as full-precision IEEE 754 doubles. The Claret published values are themselves to 4 decimal places; sco-ldc does not artificially round the interpolation result.</li>
     </ul>
 
     <h3>Notes specific to the quadratic law</h3>
