@@ -614,6 +614,30 @@ function resolveModelEntry(filter, displayName) {
 }
 
 
+// Choose a stellar model that BOTH the law's dropdown offers and the selected
+// filter actually supports.
+//
+// The model dropdown is rebuilt per law from LAW_CONFIG, so its option values
+// differ: quadratic offers ATLAS/PHOENIX, power-2 offers ATLAS/PHOENIX-COND,
+// four-parameter offers all three. Earlier code fell back to the literal string
+// 'PHOENIX', which is not an option under power-2 -- assigning it left the
+// select blank, currentModelEntry null, and the Compute button reporting
+// "Please select a filter" even though a filter was clearly selected.
+// Choosing from the live option list avoids naming a value that does not exist.
+function selectSupportedModel(filterEntry) {
+  const mSel = $('model');
+  if (!mSel || !filterEntry) return;
+  const optionValues = Array.from(mSel.options).map(o => o.value);
+
+  // Keep the user's current choice when this filter supports it.
+  if (optionValues.includes(mSel.value) && resolveModelEntry(filterEntry, mSel.value)) return;
+
+  // Otherwise fall back to the first offered option the filter does support.
+  const supported = optionValues.find(v => resolveModelEntry(filterEntry, v));
+  if (supported) mSel.value = supported;
+}
+
+
 
 function activeBounds() {
   // Bounds for the currently selected filter + model, or null if unavailable.
@@ -650,14 +674,7 @@ function onFilterChange() {
   if (!currentFilter) return;
 
   
-  const mSel = $('model');
-  const hasAtlas   = currentFilter.models.some(m => m.model === 'ATLAS');
-  const hasPhoenix = currentFilter.models.some(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND');
-  if (mSel.value === 'ATLAS' && !hasAtlas && hasPhoenix) {
-    mSel.value = 'PHOENIX';
-  } else if (mSel.value === 'PHOENIX' && !hasPhoenix && hasAtlas) {
-    mSel.value = 'ATLAS';
-  }
+  selectSupportedModel(currentFilter);
 
   onModelChange();
 
@@ -676,10 +693,9 @@ function onModelChange() {
 
   
   if (!entry) {
-    const mSel = $('model');
-    const fallback = mSel.value === 'ATLAS' ? 'PHOENIX' : 'ATLAS';
-    entry = resolveModelEntry(currentFilter, fallback);
-    if (entry) mSel.value = fallback;
+    // Same hazard as above: pick from the options this law actually offers.
+    selectSupportedModel(currentFilter);
+    entry = resolveModelEntry(currentFilter, $('model').value);
   }
 
   currentModelEntry = entry;
@@ -879,10 +895,15 @@ form.addEventListener('submit', async (ev) => {
 
   
   if (!currentFilter || !currentModelEntry) {
-    statusEl.textContent = 'Please select a filter.';
+    // Distinguish the two causes: no filter chosen at all, versus a filter
+    // chosen but no usable stellar model resolved for it.
+    const noFilter = !currentFilter;
+    statusEl.textContent = noFilter
+      ? 'Please select a filter.'
+      : 'Please select a stellar model for this filter.';
     statusEl.classList.remove('text-success', 'text-muted');
     statusEl.classList.add('text-danger');
-    $('filter').focus();
+    $(noFilter ? 'filter' : 'model').focus();
     clearResult();
     return;
   }
