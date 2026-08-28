@@ -595,8 +595,8 @@ async function loadFilters() {
 // Wire the law selector and initialize. applyLaw() calls loadFilters().
 $('law').addEventListener('change', async (ev) => {
   currentLaw = ev.target.value;
-  await applyLaw();   // repopulate filter/model dropdowns for the new law
-  blankForm();        // then clear all inputs to a pristine state
+  await applyLaw();          // repopulate filter/model dropdowns for the new law
+  resetForLawChange();       // clear only law-specific state; keep target + params
 });
 applyLaw();
 
@@ -1124,6 +1124,50 @@ function blankForm() {
   statusEl.classList.remove('text-danger', 'text-success');
   statusEl.classList.add('text-muted');
   $('computeResultMessage').textContent = '';
+}
+
+
+// Law-switch reset. Deliberately narrower than blankForm().
+//
+// RETAINED: target name, Teff, log g, [Fe/H], and the resolver baseline.
+// These inputs are law-independent. Every target in the NEA and ExoFOP
+// catalogues that is valid in one law is valid in all three, so there is no
+// reason to make the user re-enter or re-resolve them after switching laws.
+// Retaining lookupBaseline also keeps hasGridIncompatibility() working, so the
+// front end can still warn before submitting if a retained value falls outside
+// the newly selected filter's grid.
+//
+// CLEARED BY applyLaw() (not repeated here): the filter list and the model
+// options. Those are genuinely law-specific -- power-2 has no CoRoT or
+// Spitzer, quadratic has no Gaia, four-parameter has no CBB -- and the model
+// choices are derived from the selected filter, so the two must reset
+// together. applyLaw() also clears the coefficient result, which is correct
+// because coefficients only mean something within one law.
+//
+// CLEARED HERE: transient status text, plus the lookup status panel. The
+// panel's warnings (log g limits, solar-metallicity notes) are evaluated
+// against the previously selected filter's grid and would be stale under the
+// new law, so it is rebuilt rather than left standing. A short provenance
+// line is re-stated so the user can still see where the retained values came
+// from and knows a filter is still needed.
+function resetForLawChange() {
+  statusEl.textContent = '';
+  statusEl.classList.remove('text-danger', 'text-success');
+  statusEl.classList.add('text-muted');
+  $('computeResultMessage').textContent = '';
+
+  clearLookupStatus();
+  if (lookupBaseline !== null) {
+    const src = lookupBaseline.source === 'NEA'
+      ? 'the NASA Exoplanet Archive'
+      : (lookupBaseline.source === 'ExoFOP'
+          ? 'ExoFOP-TESS'
+          : (lookupBaseline.source || 'the previous lookup'));
+    addLookupLine(
+      `Stellar parameters retained from ${src}. Select a filter to continue.`,
+      'text-muted',
+    );
+  }
 }
 
 $('clearBtn').addEventListener('click', () => {
