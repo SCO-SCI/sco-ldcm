@@ -199,9 +199,13 @@ def health() -> dict:
 
 
 @app.get("/api/filters")
-def filters() -> dict:
+def filters(
+    xi: float = Query(ldc_core.DEFAULT_XI,
+                      description="Microturbulent velocity in km/s "
+                                  "(0, 1, 2, 4 or 8; default 2)"),
+) -> dict:
     
-    return {"filters": ldc_core.get_available_filters()}
+    return {"filters": ldc_core.get_available_filters(xi)}
 
 
 @app.get("/api/compute")
@@ -211,12 +215,19 @@ def compute(
     feh:  float = Query(0.0, description="Metallicity [Fe/H] in dex (solar=0.0)"),
     filter: str = Query(..., alias="filter", description="Filter code (e.g. 'V', 'G', 'Kp', 'TESS', 'CBB')"),
     model:  str = Query("ATLAS", description="Stellar atmosphere model: ATLAS, PHOENIX, or PHOENIX-COND"),
+    xi:     float = Query(ldc_core.DEFAULT_XI,
+                          description="Microturbulent velocity in km/s "
+                                      "(0, 1, 2, 4 or 8; default 2). Any value "
+                                      "other than 2 is ATLAS only."),
 ) -> dict:
     
     try:
-        result = ldc_core.compute_ldcs(teff, logg, feh, filter, model)
+        result = ldc_core.compute_ldcs(teff, logg, feh, filter, model, xi)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    # Self-describing: state which velocity produced these numbers.
+    # The legacy unprefixed route strips this key -- see parent_app.
+    result["xi"] = ldc_core._norm_xi(xi)
     return result
 
 

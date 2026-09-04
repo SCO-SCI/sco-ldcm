@@ -19,7 +19,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -37,6 +37,7 @@ from quad.app import (
     compute as _quad_compute,
     resolve as _quad_resolve,
 )
+from quad import ldc_core as _quad_ldc_core
 
 logger = logging.getLogger("scoldc-merged")
 logging.basicConfig(level=logging.INFO)
@@ -109,9 +110,45 @@ app.mount("/power2", power2_app)
 app.mount("/fourparam", fourparam_app)
 
 
+# ---------------------------------------------------------------------------
+# The legacy unprefixed routes. These are a permanent contract with NASA/TESS
+# and AstroImageJ: same bytes, forever.
+#
+# health and resolve are still bound directly to the quadratic handlers, so
+# there is exactly one implementation and no possibility of drift.
+#
+# filters and compute cannot be, from v5 onward. Their quadratic handlers now
+# accept a microturbulent velocity, and the legacy routes must not. So each is
+# wrapped in a forwarder that takes the pre-v5 parameters only and calls the
+# very same handler. The wrappers add no logic of their own: they forward, and
+# compute additionally removes the "xi" key the prefixed route reports, because
+# the legacy response must gain no new fields. Anyone sending ?xi= to an
+# unprefixed route gets it ignored, which is the intended behaviour.
+# ---------------------------------------------------------------------------
+
+def _legacy_filters() -> dict:
+    # The velocity must be passed explicitly. Calling a FastAPI handler as an
+    # ordinary function bypasses parameter resolution, so its default would
+    # arrive as a Query object rather than a number.
+    return _quad_filters(xi=_quad_ldc_core.DEFAULT_XI)
+
+
+def _legacy_compute(
+    teff: float = Query(..., description="Effective temperature in K"),
+    logg: float = Query(..., description="Surface gravity log g in cgs dex"),
+    feh:  float = Query(0.0, description="Metallicity [Fe/H] in dex (solar=0.0)"),
+    filter: str = Query(..., alias="filter", description="Filter code (e.g. 'V', 'Kp', 'TESS', 'CBB')"),
+    model:  str = Query("ATLAS", description="Stellar atmosphere model: ATLAS, PHOENIX, or PHOENIX-COND"),
+) -> dict:
+    result = _quad_compute(teff=teff, logg=logg, feh=feh, filter=filter,
+                           model=model, xi=_quad_ldc_core.DEFAULT_XI)
+    result.pop("xi", None)
+    return result
+
+
 app.add_api_route("/api/health", _quad_health, methods=["GET", "HEAD"])
-app.add_api_route("/api/filters", _quad_filters, methods=["GET"])
-app.add_api_route("/api/compute", _quad_compute, methods=["GET"])
+app.add_api_route("/api/filters", _legacy_filters, methods=["GET"])
+app.add_api_route("/api/compute", _legacy_compute, methods=["GET"])
 app.add_api_route("/api/resolve", _quad_resolve, methods=["GET"])
 
 if os.path.isdir(STATIC_DIR) and os.path.exists(os.path.join(STATIC_DIR, "index.html")):
