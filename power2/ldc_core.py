@@ -84,10 +84,25 @@ def _display_model(filter_code: str, model: str) -> str:
 
 
 Grid = Dict[str, object]
-_TABLES: Dict[Tuple[str, str, str], Grid] = {}
+
+# Microturbulent velocity, km/s. Claret publishes coefficients at these five
+# values; 2.0 is what every table has and what the service served before v5.
+SUPPORTED_XI: Tuple[float, ...] = (0.0, 1.0, 2.0, 4.0, 8.0)
+DEFAULT_XI: float = 2.0
 
 
-def _add_point(table_key: Tuple[str, str, str],
+def _norm_xi(xi: float) -> float:
+    """Canonical form of a velocity, so keys compare reliably."""
+    return round(float(xi), 3)
+
+
+# Key is (source, filter code, velocity, storage model). Velocity sits ahead of
+# the model deliberately: the sweep scripts read the filter from position 1 and
+# the model from the last position, and this ordering keeps both valid.
+_TABLES: Dict[Tuple[str, str, float, str], Grid] = {}
+
+
+def _add_point(table_key: Tuple[str, str, float, str],
                teff: float, logg: float, feh: float,
                g: float, h: float) -> None:
 
@@ -137,13 +152,12 @@ def _parse_cs22(path: str, bands: List[Tuple[str, str]]) -> int:
                 xi   = float(parts[3])
             except ValueError:
                 continue
-            if abs(xi - 2.0) > 1e-6:
-                continue
             try:
                 for bi, (code, source) in enumerate(bands):
                     g = float(parts[4 + bi])
                     h = float(parts[4 + nb + bi])
-                    _add_point((source, code, "ATLAS"), teff, logg, feh, g, h)
+                    _add_point((source, code, _norm_xi(xi), "ATLAS"),
+                               teff, logg, feh, g, h)
             except ValueError:
                 continue
             count += 1
@@ -167,13 +181,18 @@ def _parse_cs23(path: str, bands: List[Tuple[str, str]]) -> int:
                 logg = float(parts[0])
                 teff = float(parts[1])
                 feh  = float(parts[2])
+                # Bytes 19-22 are the Vel column (CDS J/A+A/674/A63). Every row
+                # of these PHOENIX-COND files carries 2.0, so this grid ends up
+                # at 2.0 and nowhere else, which is what the refusal rule wants.
+                xi   = _norm_xi(float(parts[3]))
             except ValueError:
                 continue
             try:
                 for bi, (code, source) in enumerate(bands):
                     g = float(parts[4 + bi])
                     h = float(parts[4 + nb + bi])
-                    _add_point((source, code, "PHOENIX"), teff, logg, feh, g, h)
+                    _add_point((source, code, xi, "PHOENIX"),
+                               teff, logg, feh, g, h)
             except ValueError:
                 continue
             count += 1
@@ -210,9 +229,10 @@ def _parse_cbb_power2(path: str, source: str) -> int:
                 buf = []
                 if not (lg1 == lg2 == lg3 and te1 == te2 == te3 and fe1 == fe2 == fe3):
                     continue
-                if abs(xi1 - 2.0) > 1e-6:
+                if not (xi1 == xi2 == xi3):
                     continue
-                _add_point((source, "CBB", "ATLAS"), te1, lg1, fe1, c_g, c_h)
+                _add_point((source, "CBB", _norm_xi(xi1), "ATLAS"),
+                           te1, lg1, fe1, c_g, c_h)
                 count += 1
     return count
 
@@ -223,7 +243,7 @@ def _parse_cbb_power2(path: str, source: str) -> int:
 import pickle
 
 CACHE_FILENAME = "tables.pkl"
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 # (filter_code, source_tag) per band, in on-file column order.
 _T = "CS22_CS23"   # both ATLAS (CS22) and PHOENIX (CS23)
@@ -339,7 +359,8 @@ def load_tables(data_dir: str, use_cache: bool = True) -> Dict[str, int]:
 
 
 
-def _resolve_table_key(filter_code: str, model: str) -> Tuple[str, str, str]:
+def _resolve_table_key(filter_code: str, model: str,
+                       xi: float = DEFAULT_XI) -> Tuple[str, str, float, str]:
 
     entry = None
     for f in FILTER_REGISTRY:
@@ -355,10 +376,10 @@ def _resolve_table_key(filter_code: str, model: str) -> Tuple[str, str, str]:
     else:
         storage_model = model.upper()
 
-    return (source, filter_code, storage_model)
+    return (source, filter_code, _norm_xi(xi), storage_model)
 
 
-def get_available_filters() -> List[Dict]:
+def get_available_filters(xi: float = DEFAULT_XI) -> List[Dict]:
 
     out: List[Dict] = []
     for f in FILTER_REGISTRY:
@@ -366,7 +387,7 @@ def get_available_filters() -> List[Dict]:
         source = f["source"]
         models_present: List[Dict] = []
         for storage_model in EXPECTED_MODELS[source]:
-            grid = _TABLES.get((source, code, storage_model))
+            grid = _TABLES.get((source, code, _norm_xi(xi), storage_model))
             if grid is None:
                 continue
             teffs = grid["teffs"]   # type: ignore[index]
@@ -457,12 +478,28 @@ def maxted_params(g: float, h: float) -> Tuple[float, float, bool]:
 
 
 def compute_ldcs(teff: float, logg: float, feh: float,
-                 filter_code: str, model: str
+                 filter_code: str, model: str,
+                 xi: float = DEFAULT_XI
                  ) -> Dict[str, object]:
 
-    source, code, storage_model = _resolve_table_key(filter_code, model)
-    grid = _TABLES.get((source, code, storage_model))
+    xi = _norm_xi(xi)
+    if xi not in SUPPORTED_XI:
+        allowed = ", ".join(f"{v:g}" for v in SUPPORTED_XI)
+        raise ValueError(
+            f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
+            f"coefficients are published only at {allowed} km/s.")
+
+    table_key = _resolve_table_key(filter_code, model, xi)
+    source, code, _xi, storage_model = table_key
+    grid = _TABLES.get(table_key)
     if grid is None:
+        model_name = _display_model(filter_code, storage_model)
+        if xi != DEFAULT_XI and _TABLES.get(
+                (source, code, DEFAULT_XI, storage_model)) is not None:
+            raise ValueError(
+                f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
+                f"the {model_name} table for filter {filter_code} is published "
+                f"only at {DEFAULT_XI:g} km/s.")
         raise ValueError(
             f"no data for filter {filter_code!r} with model {model!r}")
 

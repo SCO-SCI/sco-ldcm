@@ -73,10 +73,25 @@ def _display_model(filter_code: str, model: str) -> str:
 
 
 Grid = Dict[str, object]
-_TABLES: Dict[Tuple[str, str], Grid] = {}
+
+# Microturbulent velocity, km/s. Claret publishes coefficients at these five
+# values; 2.0 is what every table has and what the service served before v5.
+SUPPORTED_XI: Tuple[float, ...] = (0.0, 1.0, 2.0, 4.0, 8.0)
+DEFAULT_XI: float = 2.0
 
 
-def _add_point(table_key: Tuple[str, str],
+def _norm_xi(xi: float) -> float:
+    """Canonical form of a velocity, so keys compare reliably."""
+    return round(float(xi), 3)
+
+
+# Key is (source, filter code, velocity, storage model). Velocity sits ahead of
+# the model deliberately: the sweep scripts read the filter from position 1 and
+# the model from the last position, and this ordering keeps both valid.
+_TABLES: Dict[Tuple[str, str, float, str], Grid] = {}
+
+
+def _add_point(table_key: Tuple[str, str, float, str],
                teff: float, logg: float, feh: float,
                u1: float, u2: float) -> None:
    
@@ -130,12 +145,10 @@ def _parse_tableab(path: str) -> int:
 
             if met != "L":
                 continue
-            if abs(xi - 2.0) > 1e-6:
-                continue
             if mod not in ("ATLAS", "PHOENIX"):
                 continue
 
-            _add_point(("CB2011", code, mod), teff, logg, feh, u1, u2)
+            _add_point(("CB2011", code, _norm_xi(xi), mod), teff, logg, feh, u1, u2)
             count += 1
     return count
 
@@ -157,7 +170,10 @@ def _parse_table5(path: str) -> int:
             except ValueError:
                 continue
             
-            _add_point(("C2018", "TESS", "PHOENIX"), teff, logg, feh, u1, u2)
+            # Bytes 19-22 of this file hold the mixing-length parameter, not
+            # velocity (see CDS J/A+A/618/A20). The models were computed at
+            # 2.0 km/s, so the grid is filed there and nowhere else.
+            _add_point(("C2018", "TESS", DEFAULT_XI, "PHOENIX"), teff, logg, feh, u1, u2)
             count += 1
     return count
 
@@ -165,7 +181,7 @@ def _parse_table5(path: str) -> int:
 def _parse_cbbquadratic(path: str) -> int:
     
     count = 0
-    buf: List[Tuple[float, float, float, float]] = []   # (logg, teff, feh, coeff)
+    buf: List[Tuple[float, float, float, float, float]] = []   # (logg, teff, feh, vel, coeff)
     with open(path, "r", encoding="ascii", errors="replace") as fh:
         for raw in fh:
             line = raw.strip()
@@ -184,21 +200,21 @@ def _parse_cbbquadratic(path: str) -> int:
             except ValueError:
                 
                 continue
-            buf.append((logg, teff, feh, coef))
+            buf.append((logg, teff, feh, vel, coef))
             
             if len(buf) == 3:
-                (lg1, te1, fe1, c_a) = buf[0]
-                (lg2, te2, fe2, c_b) = buf[1]
-                (lg3, te3, fe3, c_x) = buf[2]
+                (lg1, te1, fe1, ve1, c_a) = buf[0]
+                (lg2, te2, fe2, ve2, c_b) = buf[1]
+                (lg3, te3, fe3, ve3, c_x) = buf[2]
                 buf = []
                 
                 if not (lg1 == lg2 == lg3 and te1 == te2 == te3 and fe1 == fe2 == fe3):
                     
                     continue
-                
-                if abs(vel - 2.0) > 1e-6:
+                if not (ve1 == ve2 == ve3):
+                    
                     continue
-                _add_point(("CMG2022", "CBB", "ATLAS"), te1, lg1, fe1, c_a, c_b)
+                _add_point(("CMG2022", "CBB", _norm_xi(ve1), "ATLAS"), te1, lg1, fe1, c_a, c_b)
                 count += 1
     return count
 
@@ -222,18 +238,20 @@ def _parse_c2021(path: str, model: str) -> int:
                     vel  = float(parts[3])
                     u1   = float(parts[4])
                     u2   = float(parts[5])
-                    if abs(vel - 2.0) > 1e-6:
-                        continue
+                    xi   = _norm_xi(vel)
                 else:  # PHOENIX-COND
                     logg = float(parts[0])
                     teff = float(parts[1])
                     feh  = float(parts[2])
                     u1   = float(parts[3])
                     u2   = float(parts[4])
+                    # This file has no velocity column at all (CDS
+                    # J/other/RNAAS/5.13). Its models are 2.0 km/s.
+                    xi   = DEFAULT_XI
             except ValueError:
                 continue
 
-            _add_point(("C2021", "CHEOPS", model), teff, logg, feh, u1, u2)
+            _add_point(("C2021", "CHEOPS", xi, model), teff, logg, feh, u1, u2)
             count += 1
     return count
 
@@ -243,7 +261,7 @@ def _parse_c2021(path: str, model: str) -> int:
 import pickle
 
 CACHE_FILENAME = "tables.pkl"
-CACHE_VERSION = 3        
+CACHE_VERSION = 4        
 SOURCE_FILES = ("tableab.dat", "table5.dat", "CBBQUADRATIC.txt",
                 "table2.dat", "table8.dat")
 
@@ -331,7 +349,8 @@ def load_tables(data_dir: str, use_cache: bool = True) -> Dict[str, int]:
 
 
 
-def _resolve_table_key(filter_code: str, model: str) -> Tuple[str, str, str]:
+def _resolve_table_key(filter_code: str, model: str,
+                       xi: float = DEFAULT_XI) -> Tuple[str, str, float, str]:
     
     entry = None
     for f in FILTER_REGISTRY:
@@ -348,10 +367,10 @@ def _resolve_table_key(filter_code: str, model: str) -> Tuple[str, str, str]:
     else:
         storage_model = model.upper()
 
-    return (source, filter_code, storage_model)
+    return (source, filter_code, _norm_xi(xi), storage_model)
 
 
-def get_available_filters() -> List[Dict]:
+def get_available_filters(xi: float = DEFAULT_XI) -> List[Dict]:
     
     out: List[Dict] = []
     for f in FILTER_REGISTRY:
@@ -359,7 +378,7 @@ def get_available_filters() -> List[Dict]:
         source = f["source"]
         models_present: List[Dict] = []
         for storage_model in EXPECTED_MODELS[source]:
-            grid = _TABLES.get((source, code, storage_model))
+            grid = _TABLES.get((source, code, _norm_xi(xi), storage_model))
             if grid is None:
                 continue
             teffs = grid["teffs"]   # type: ignore[index]
@@ -442,12 +461,28 @@ def _filter_has_model(filter_code: str, storage_model: str) -> bool:
 
 
 def compute_ldcs(teff: float, logg: float, feh: float,
-                 filter_code: str, model: str
+                 filter_code: str, model: str,
+                 xi: float = DEFAULT_XI
                  ) -> Dict[str, object]:
     
-    source, code, storage_model = _resolve_table_key(filter_code, model)
-    grid = _TABLES.get((source, code, storage_model))
+    xi = _norm_xi(xi)
+    if xi not in SUPPORTED_XI:
+        allowed = ", ".join(f"{v:g}" for v in SUPPORTED_XI)
+        raise ValueError(
+            f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
+            f"coefficients are published only at {allowed} km/s.")
+
+    table_key = _resolve_table_key(filter_code, model, xi)
+    source, code, _xi, storage_model = table_key
+    grid = _TABLES.get(table_key)
     if grid is None:
+        model_name = _display_model(filter_code, storage_model)
+        if xi != DEFAULT_XI and _TABLES.get(
+                (source, code, DEFAULT_XI, storage_model)) is not None:
+            raise ValueError(
+                f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
+                f"the {model_name} table for filter {filter_code} is published "
+                f"only at {DEFAULT_XI:g} km/s.")
         raise ValueError(
             f"no data for filter {filter_code!r} with model {model!r}")
 

@@ -85,12 +85,27 @@ def _display_model(filter_code: str, model: str) -> str:
 
 
 Grid = Dict[str, object]
-_TABLES: Dict[Tuple[str, str, str], Grid] = {}
+
+# Microturbulent velocity, km/s. Claret publishes coefficients at these five
+# values; 2.0 is what every table has and what the service served before v5.
+SUPPORTED_XI: Tuple[float, ...] = (0.0, 1.0, 2.0, 4.0, 8.0)
+DEFAULT_XI: float = 2.0
+
+
+def _norm_xi(xi: float) -> float:
+    """Canonical form of a velocity, so keys compare reliably."""
+    return round(float(xi), 3)
+
+
+# Key is (source, filter code, velocity, storage model). Velocity sits ahead of
+# the model deliberately: the sweep scripts read the filter from position 1 and
+# the model from the last position, and this ordering keeps both valid.
+_TABLES: Dict[Tuple[str, str, float, str], Grid] = {}
 
 Coef4 = Tuple[float, float, float, float]
 
 
-def _add_point(table_key: Tuple[str, str, str],
+def _add_point(table_key: Tuple[str, str, float, str],
                teff: float, logg: float, feh: float,
                a1: float, a2: float, a3: float, a4: float) -> None:
 
@@ -164,21 +179,20 @@ def _parse_tableeq5(path: str) -> int:
 
             if met != "L":
                 continue
-            if abs(xi - 2.0) > 1e-6:
-                continue
 
             # Only ingest CB2011 filters that appear in this registry.
             source = _CB_SOURCE_BY_CODE.get(code)
             if source is None:
                 continue
 
+            v = _norm_xi(xi)
             if mod == "ATLAS":
-                _add_point((source, code, "ATLAS"), teff, logg, feh, a1, a2, a3, a4)
+                _add_point((source, code, v, "ATLAS"), teff, logg, feh, a1, a2, a3, a4)
                 count += 1
             elif mod == "PHOENIX":
                 # Option B: keep CB2011 PHOENIX only for CoRoT/Spitzer.
                 if code in _CB_PHOENIX_KEEP:
-                    _add_point((source, code, "PHOENIX"), teff, logg, feh, a1, a2, a3, a4)
+                    _add_point((source, code, v, "PHOENIX"), teff, logg, feh, a1, a2, a3, a4)
                     count += 1
                 # else: drop -- CS2023 supplies PHOENIX-COND for this band.
     return count
@@ -203,7 +217,10 @@ def _parse_cs23_4p(path: str, bands: List[Tuple[str, str]]) -> int:
                 logg = float(parts[0])
                 teff = float(parts[1])
                 feh  = float(parts[2])
-                # parts[3] = xi (fixed 2.0), not needed
+                # Bytes 19-22 are the Vel column (CDS J/A+A/674/A63). Every row
+                # of these PHOENIX-COND files carries 2.0, so this grid ends up
+                # at 2.0 and nowhere else, which is what the refusal rule wants.
+                xi   = _norm_xi(float(parts[3]))
             except ValueError:
                 continue
             try:
@@ -212,7 +229,7 @@ def _parse_cs23_4p(path: str, bands: List[Tuple[str, str]]) -> int:
                     a2 = float(parts[4 + nb + bi])
                     a3 = float(parts[4 + 2 * nb + bi])
                     a4 = float(parts[4 + 3 * nb + bi])
-                    _add_point((source, code, "PHOENIX"), teff, logg, feh,
+                    _add_point((source, code, xi, "PHOENIX"), teff, logg, feh,
                                a1, a2, a3, a4)
             except (ValueError, IndexError):
                 continue
@@ -224,7 +241,7 @@ def _parse_cs23_4p(path: str, bands: List[Tuple[str, str]]) -> int:
 
 
 CACHE_FILENAME = "tables.pkl"
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 # CS2023 band orders (on-file column order), each (filter_code, source_tag).
 # Gaia/TESS/CHEOPS are CS_ONLY; Kepler is CB_CS (its ATLAS comes from CB2011).
@@ -321,7 +338,8 @@ def load_tables(data_dir: str, use_cache: bool = True) -> Dict[str, int]:
 # Lookup / interpolation. Identical trilinear scheme as the quadratic and
 # power-2 systems, extended to interpolate four coefficients (a1..a4).
 # ---------------------------------------------------------------------------
-def _resolve_table_key(filter_code: str, model: str) -> Tuple[str, str, str]:
+def _resolve_table_key(filter_code: str, model: str,
+                       xi: float = DEFAULT_XI) -> Tuple[str, str, float, str]:
     entry = None
     for f in FILTER_REGISTRY:
         if f["code"] == filter_code:
@@ -336,7 +354,7 @@ def _resolve_table_key(filter_code: str, model: str) -> Tuple[str, str, str]:
     else:
         storage_model = model.upper()
 
-    return (source, filter_code, storage_model)
+    return (source, filter_code, _norm_xi(xi), storage_model)
 
 
 def _bracket(axis: List[float], x: float) -> Tuple[int, int, float]:
@@ -384,12 +402,28 @@ def _filter_has_model(filter_code: str, storage_model: str) -> bool:
 
 
 def compute_ldcs(teff: float, logg: float, feh: float,
-                 filter_code: str, model: str
+                 filter_code: str, model: str,
+                 xi: float = DEFAULT_XI
                  ) -> Dict[str, object]:
 
-    source, code, storage_model = _resolve_table_key(filter_code, model)
-    grid = _TABLES.get((source, code, storage_model))
+    xi = _norm_xi(xi)
+    if xi not in SUPPORTED_XI:
+        allowed = ", ".join(f"{v:g}" for v in SUPPORTED_XI)
+        raise ValueError(
+            f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
+            f"coefficients are published only at {allowed} km/s.")
+
+    table_key = _resolve_table_key(filter_code, model, xi)
+    source, code, _xi, storage_model = table_key
+    grid = _TABLES.get(table_key)
     if grid is None:
+        model_name = _display_model(filter_code, storage_model)
+        if xi != DEFAULT_XI and _TABLES.get(
+                (source, code, DEFAULT_XI, storage_model)) is not None:
+            raise ValueError(
+                f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
+                f"the {model_name} table for filter {filter_code} is published "
+                f"only at {DEFAULT_XI:g} km/s.")
         raise ValueError(
             f"no data for filter {filter_code!r} with model {model!r}")
 
@@ -514,14 +548,14 @@ def compute_ldcs(teff: float, logg: float, feh: float,
     }
 
 
-def get_available_filters() -> List[Dict]:
+def get_available_filters(xi: float = DEFAULT_XI) -> List[Dict]:
     out: List[Dict] = []
     for f in FILTER_REGISTRY:
         code = f["code"]
         source = f["source"]
         models_present: List[Dict] = []
         for storage_model in EXPECTED_MODELS[source]:
-            grid = _TABLES.get((source, code, storage_model))
+            grid = _TABLES.get((source, code, _norm_xi(xi), storage_model))
             if grid is None:
                 continue
             teffs = grid["teffs"]   # type: ignore[index]
