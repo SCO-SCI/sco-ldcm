@@ -225,7 +225,9 @@
 	  <form id="form" autocomplete="off" novalidate>      
 
         <div class="mb-3">
-          <label for="filter" class="form-label">Filter</label>
+          <label for="filter" class="form-label">
+            Filter<span class="hint" id="filterHint">&nbsp;</span>
+          </label>
           <select class="form-select" id="filter" name="filter" required=""></select>
         </div>
 
@@ -272,12 +274,21 @@
           <input type="number" class="form-control" id="feh" name="feh" step="0.01" required="">
         </div>
 
-        <div class="mb-3">
-          <label for="model" class="form-label">Stellar atmosphere model</label>
-          <select class="form-select" id="model" name="model">
-            <option value="ATLAS" selected>ATLAS</option>
-            <option value="PHOENIX">PHOENIX</option>
-          </select>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label for="model" class="form-label">
+              Stellar model<span class="hint" id="modelHint">&nbsp;</span>
+            </label>
+            <select class="form-select" id="model" name="model">
+              <option value="" selected>— Select a model —</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label for="xi" class="form-label">
+              Microturb. ξ (km/s)<span class="hint" id="xiHint">&nbsp;</span>
+            </label>
+            <select class="form-select" id="xi" name="xi"></select>
+          </div>
         </div>
 
         <div class="d-flex gap-2 mt-3">
@@ -460,6 +471,328 @@ const lookupBtn = $('lookupBtn');
 const lookupStatusEl = $('lookupStatus');
 
 
+
+/* ===== v5 velocity: evaluator ===== */
+/* SCO-LDC input-validation evaluator.
+ *
+ * One pure function. Given the current form state and the capability map for
+ * the current law, it returns what every field should now offer, which fields
+ * lock, and whether the form can be submitted. It has no knowledge of the DOM,
+ * makes no network calls, and has no side effects: the same inputs always give
+ * the same output. That is what lets it be tested exhaustively without a browser.
+ *
+ * The rule it implements (Ed's design, one rule for everything):
+ *   The moment any field is set, every other field narrows to only the values
+ *   that choice allows. A field whose options narrow to one takes that value
+ *   and locks (greys out). Fields narrow each other in both directions, in any
+ *   order. A conflicting pair can never be built, so there are no conflict
+ *   messages -- the field simply never offered the value that would clash.
+ *
+ * Two tiers. This evaluator owns C1-C4: which filters, models and velocities
+ * are mutually compatible, and the advertised axis ranges. It does NOT own C5,
+ * whether an exact (Teff, logg, feh) point has data -- grids are ragged and only
+ * the service knows. So a state this evaluator calls submittable may still be
+ * refused by the service, and that refusal is normal, shown in the message area.
+ */
+
+const SCO_XI_ALL = [0.0, 1.0, 2.0, 4.0, 8.0];
+
+/* The capability map is the array the service returns under "capabilities":
+ *   [{ code, name, category, grids: [
+ *        { model, model_key, xi, teff_min, teff_max,
+ *          logg_min, logg_max, feh_min, feh_max, feh_fixed }, ... ] }, ... ]
+ *
+ * state is { filter, model, xi, teff, logg, feh } -- any field may be null/'' .
+ * A discrete field (filter, model, xi) is "set" when it holds a value that is
+ * still among its options. A continuous field (teff, logg, feh) is "set" when
+ * it holds a finite number.
+ */
+
+function scoEvaluate(state, capabilities) {
+  // Flatten to the list of grids that are still live under the current choices,
+  // ignoring the field we are computing options FOR each time.
+  const grids = [];
+  for (const f of capabilities) {
+    for (const g of f.grids) {
+      grids.push({
+        filter: f.code, filterName: f.name,
+        model: g.model, model_key: g.model_key, xi: g.xi,
+        teff_min: g.teff_min, teff_max: g.teff_max,
+        logg_min: g.logg_min, logg_max: g.logg_max,
+        feh_min: g.feh_min, feh_max: g.feh_max, feh_fixed: g.feh_fixed,
+      });
+    }
+  }
+
+  const num = (v) => (v === null || v === undefined || v === '' || isNaN(v))
+    ? null : Number(v);
+  // The service treats PHOENIX and PHOENIX-COND as one underlying model, so the
+  // evaluator must compare on model_key, not the display label. Resolve the
+  // selected display name to a key using the grids themselves.
+  function modelKeyOf(displayName) {
+    if (displayName === null || displayName === undefined || displayName === '') return null;
+    const hit = grids.find(g => g.model === displayName);
+    if (hit) return hit.model_key;
+    // fall back: a caller may pass a key directly
+    const byKey = grids.find(g => g.model_key === displayName);
+    return byKey ? byKey.model_key : displayName;
+  }
+
+  const sel = {
+    filter: state.filter || null,
+    modelKey: modelKeyOf(state.model),
+    model:  state.model  || null,
+    xi:     num(state.xi),
+    teff:   num(state.teff),
+    logg:   num(state.logg),
+    feh:    num(state.feh),
+  };
+
+  // Does a grid satisfy every selected constraint EXCEPT the ones named in skip?
+  function ok(g, skip) {
+    if (!skip.has('filter') && sel.filter !== null && g.filter !== sel.filter) return false;
+    if (!skip.has('model')  && sel.modelKey !== null && g.model_key !== sel.modelKey) return false;
+    if (!skip.has('xi')     && sel.xi     !== null && g.xi !== sel.xi)         return false;
+    if (!skip.has('teff')   && sel.teff   !== null &&
+        (sel.teff < g.teff_min || sel.teff > g.teff_max)) return false;
+    if (!skip.has('logg')   && sel.logg   !== null &&
+        (sel.logg < g.logg_min || sel.logg > g.logg_max)) return false;
+    if (!skip.has('feh')    && sel.feh    !== null &&
+        (sel.feh < g.feh_min || sel.feh > g.feh_max)) return false;
+    return true;
+  }
+
+  // For a discrete field, the options are the distinct values it could take
+  // while every OTHER selected constraint still holds.
+  function optionsFor(field, key) {
+    const skip = new Set([field]);
+    const vals = new Set();
+    for (const g of grids) if (ok(g, skip)) vals.add(g[key]);
+    return [...vals];
+  }
+
+  const filterOpts = optionsFor('filter', 'filter')
+    .map(code => ({ code, name: (capabilities.find(f => f.code === code) || {}).name }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+  const modelOpts = optionsFor('model', 'model');
+  const xiOpts    = optionsFor('xi', 'xi').sort((a, b) => a - b);
+
+  // Continuous field ranges: the envelope of grids that satisfy every OTHER
+  // constraint. Endpoints only -- the interior may be ragged (C5, service-owned).
+  function rangeFor(field, lo, hi, fixedKey) {
+    const skip = new Set([field]);
+    let min = Infinity, max = -Infinity, fixed = true, any = false;
+    for (const g of grids) {
+      if (!ok(g, skip)) continue;
+      any = true;
+      if (g[lo] < min) min = g[lo];
+      if (g[hi] > max) max = g[hi];
+      if (!g.feh_fixed) fixed = false;
+    }
+    if (!any) return null;
+    return { min, max, fixed: fixedKey ? fixed : false };
+  }
+
+  const teffRange = rangeFor('teff', 'teff_min', 'teff_max', false);
+  const loggRange = rangeFor('logg', 'logg_min', 'logg_max', false);
+  const fehRange  = rangeFor('feh', 'feh_min', 'feh_max', true);
+
+  // A discrete field locks when exactly one option remains; it then reports the
+  // reason implicitly through the blurb (single value), never through a message.
+  function discreteField(opts, current, valueKey) {
+    const values = valueKey ? opts.map(o => o[valueKey]) : opts;
+    const locked = values.length === 1;
+    return {
+      options: opts,
+      locked,
+      value: locked ? values[0] : current,
+      // current selection is invalid if it is set but not among the options
+      invalid: current !== null && current !== undefined && current !== '' &&
+               !values.includes(valueKey ? current : current),
+    };
+  }
+
+  const fields = {
+    filter: discreteField(filterOpts, sel.filter, 'code'),
+    model:  discreteField(modelOpts, sel.model, null),
+    xi:     discreteField(xiOpts, sel.xi, null),
+    teff:   { range: teffRange, locked: false,
+              blurb: teffRange ? `${teffRange.min} – ${teffRange.max} K` : '—' },
+    logg:   { range: loggRange, locked: false,
+              blurb: loggRange ? `${loggRange.min} – ${loggRange.max}` : '—' },
+    feh:    (() => {
+      // metallicity locks to solar when the surviving grids are all solar-only
+      if (fehRange && fehRange.fixed) {
+        return { range: fehRange, locked: true, value: 0.0, blurb: 'solar (0.0)' };
+      }
+      return { range: fehRange, locked: false,
+               blurb: fehRange ? `${fehRange.min} – ${fehRange.max}` : '—' };
+    })(),
+  };
+
+  // Blurbs for the discrete fields: the remaining options, or the single value.
+  fields.filter.blurb = fields.filter.options.length +
+    (fields.filter.options.length === 1 ? ' filter' : ' filters');
+  fields.model.blurb  = fields.model.options.join(', ') || '—';
+  fields.xi.blurb     = fields.xi.options.length
+    ? fields.xi.options.map(v => (v % 1 === 0 ? v.toFixed(0) : v)).join(', ')
+    : '—';
+
+  // Can we submit? Every discrete field must resolve to exactly one grid, and
+  // the continuous fields must be present and within range. C5 is not checked.
+  const chosen = grids.filter(g => ok(g, new Set()));
+  const haveDiscrete = sel.filter && sel.model && sel.xi !== null;
+  const haveContinuous = sel.teff !== null && sel.logg !== null && sel.feh !== null;
+  const canSubmit = haveDiscrete && haveContinuous && chosen.length > 0;
+
+  return { fields, canSubmit, matchingGrids: chosen.length };
+}
+
+
+/* ===== v5 velocity: form module ===== */
+/* ==========================================================================
+   SCO-LDC v5 input validation — the single evaluation path.
+
+   Replaces the scattered onFilterChange / onModelChange / selectSupportedModel
+   / refreshHints logic. Every field change now flows through one function:
+   read the state, ask the evaluator, render. Order of entry is irrelevant
+   because the evaluator depends only on the state, never on how it was reached.
+
+   The evaluator (scoEvaluate) is defined earlier in this file and owns C1-C4.
+   C5 (whether an exact point has data) stays with the service and surfaces as
+   a refusal in the #status area.
+   ========================================================================== */
+
+/* Capability data per law, fetched once and cached for the session. */
+const SCO_CAPS = {};   // law -> capabilities array
+
+async function scoLoadCapabilities(law) {
+  if (SCO_CAPS[law]) return SCO_CAPS[law];
+  const resp = await fetch(LAW_CONFIG[law].prefix + '/api/capabilities');
+  if (!resp.ok) throw new Error('capabilities ' + resp.status);
+  SCO_CAPS[law] = (await resp.json()).capabilities;
+  return SCO_CAPS[law];
+}
+
+/* Read the current form into the evaluator's state shape. */
+function scoReadState() {
+  return {
+    filter: $('filter').value || null,
+    model:  $('model').value || null,
+    xi:     $('xi').value === '' ? null : Number($('xi').value),
+    teff:   $('teff').value.trim() === '' ? null : Number($('teff').value),
+    logg:   $('logg').value.trim() === '' ? null : Number($('logg').value),
+    feh:    $('feh').value.trim() === '' ? null : Number($('feh').value),
+  };
+}
+
+/* Compatibility: keep the old currentFilter / currentModelEntry in sync so the
+   submit handler and lookup code, which still read them, keep working. */
+function scoSyncLegacy() {
+  const code = $('filter').value;
+  currentFilter = code ? FILTERS.find(f => f.code === code) || null : null;
+  currentModelEntry = null;
+  if (currentFilter) {
+    const model = $('model').value;
+    const xi = Number($('xi').value);
+    currentModelEntry = (currentFilter.models || []).find(
+      g => g.model === model && Math.abs(g.xi - xi) < 1e-6) ||
+      (currentFilter.models || []).find(g => g.model === model) || null;
+  }
+}
+
+/* Rebuild a <select> to hold exactly `options`, preserving `keep` if present.
+   Returns the value the select ended up on. */
+function scoFillSelect(sel, options, labelOf, keep) {
+  const prev = keep !== undefined ? keep : sel.value;
+  sel.innerHTML = '';
+  for (const o of options) {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    sel.appendChild(opt);
+  }
+  if (options.some(o => o.value === prev)) {
+    sel.value = prev;
+  } else if (options.length) {
+    sel.value = options[0].value;
+  }
+  return sel.value;
+}
+
+/* The one render pass. Called after any field changes. */
+let SCO_CAPS_CURRENT = [];
+
+function scoRefresh() {
+  const caps = SCO_CAPS_CURRENT;
+  if (!caps || !caps.length) return;
+
+  const state = scoReadState();
+  const r = scoEvaluate(state, caps);
+  const f = r.fields;
+
+  /* --- filter dropdown: narrow to available codes, keep a blank placeholder */
+  const filterSel = $('filter');
+  const prevFilter = filterSel.value;
+  const filterOpts = [{ value: '', label: '\u2014 Select a filter \u2014' }]
+    .concat(f.filter.options.map(o => ({ value: o.code, label: `${o.name} (${o.code})` })));
+  scoFillSelect(filterSel, filterOpts, null, prevFilter);
+
+  /* --- model dropdown. Blank placeholder until chosen, unless locked to one. */
+  const modelSel = $('model');
+  let modelOpts = f.model.options.map(m => ({ value: m, label: m }));
+  if (!f.model.locked) {
+    modelOpts = [{ value: '', label: '\u2014 Select a model \u2014' }].concat(modelOpts);
+  }
+  scoFillSelect(modelSel, modelOpts, null, modelSel.value);
+  modelSel.disabled = f.model.locked;
+
+  /* --- velocity dropdown. A blank placeholder until the user chooses, unless
+     the field has locked to a single value (then show just that value). */
+  const xiSel = $('xi');
+  let xiOpts = f.xi.options.map(v => ({
+    value: String(v),
+    label: (v % 1 === 0 ? v.toFixed(0) : String(v)) + ' km/s',
+  }));
+  if (!f.xi.locked) {
+    xiOpts = [{ value: '', label: '\u2014 Select \u03be \u2014' }].concat(xiOpts);
+  }
+  scoFillSelect(xiSel, xiOpts, null, xiSel.value);
+  xiSel.disabled = f.xi.locked;
+
+  /* --- continuous fields: blurbs, and the solar lock on metallicity */
+  $('teffHint').textContent = f.teff.blurb;
+  $('loggHint').textContent = f.logg.blurb;
+  $('fehHint').textContent  = f.feh.blurb;
+
+  if (f.feh.locked) {
+    $('feh').value = '0.0';
+    $('feh').disabled = true;
+  } else {
+    $('feh').disabled = false;
+  }
+
+  /* --- the discrete blurbs sit beside their fields */
+  $('filterHint').textContent = f.filter.blurb;
+  $('modelHint').textContent  = f.model.blurb;
+  $('xiHint').textContent     = f.xi.blurb;
+
+  scoSyncLegacy();
+}
+
+/* Wire every field to the single path. */
+function scoWireValidation() {
+  ['filter', 'model', 'xi', 'teff', 'logg', 'feh'].forEach(id => {
+    const el = $(id);
+    if (el && !el.dataset.scoWired) {
+      el.addEventListener('change', () => { scoRefresh(); tryAutoCompute(); });
+      el.addEventListener('input',  () => { scoRefresh(); });
+      el.dataset.scoWired = '1';   // guard against the historic listener leak
+    }
+  });
+}
+
+
 let FILTERS = [];
 let currentFilter = null;
 let currentModelEntry = null;
@@ -531,15 +864,21 @@ async function applyLaw() {
   // Model dropdown options
   const modelSel = $("model");
   if (modelSel) {
-    const prev = modelSel.value;
     modelSel.innerHTML = "";
-    cfg.models.forEach(([val, label], i) => {
+    const ph = document.createElement("option");
+    ph.value = ""; ph.textContent = "\u2014 Select a model \u2014";
+    modelSel.appendChild(ph);
+    cfg.models.forEach(([val, label]) => {
       const opt = document.createElement("option");
       opt.value = val; opt.textContent = label;
-      if (i === 0) opt.selected = true;
       modelSel.appendChild(opt);
     });
+    modelSel.value = "";
   }
+  // v5: a law switch starts the new law fully blank -- clear any stale filter
+  // and velocity so nothing is pre-narrowed from the previous law.
+  const _xiSel = $("xi"); if (_xiSel) _xiSel.value = "";
+  const _fSel = $("filter"); if (_fSel) _fSel.value = "";
   // Reload filters from the selected law's backend
   await loadFilters();
   clearResult();
@@ -547,46 +886,18 @@ async function applyLaw() {
 
 async function loadFilters() {
   try {
-    const resp = await fetch(apiBase() + '/filters');
-    if (!resp.ok) throw new Error(resp.statusText);
-    const data = await resp.json();
-    FILTERS = data.filters;
-    const sel = $('filter');
-    sel.innerHTML = '';
-
-    // Blank default option — forces user to actively choose a filter.
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = '— Select a filter —';
-    sel.appendChild(placeholder);
-
-    
-    const groups = new Map();
-    for (const f of FILTERS) {
-      if (!groups.has(f.category)) groups.set(f.category, []);
-      groups.get(f.category).push(f);
-    }
-    const catOrder = lawCfg().catOrder;
-    for (const cat of catOrder) {
-      if (!groups.has(cat)) continue;
-      const og = document.createElement('optgroup');
-      og.label = cat;
-      for (const f of groups.get(cat)) {
-        const opt = document.createElement('option');
-        opt.value = f.code;
-        opt.textContent = `${f.name} (${f.code})`;
-        og.appendChild(opt);
-      }
-      sel.appendChild(og);
-    }
-
-    
-    sel.value = '';
-
-    sel.addEventListener('change', onFilterChange);
-    $('model').addEventListener('change', onModelChange);
-    onFilterChange();
-    refreshHints();   // show the current model's bounds immediately on load
+    // v5: load the full capability map (filter x model x velocity) once per law
+    // and drive every field from the single evaluator path.
+    SCO_CAPS_CURRENT = await scoLoadCapabilities(currentLaw);
+    // Keep FILTERS populated for any legacy reader, derived from capabilities.
+    FILTERS = SCO_CAPS_CURRENT.map(f => ({
+      code: f.code, name: f.name, category: f.category,
+      source: f.source, citation: f.citation,
+      models: f.grids,
+    }));
+    $('filter').value = '';
+    scoWireValidation();
+    scoRefresh();
   } catch (e) {
     statusEl.textContent = 'Could not load filters: ' + e.message;
     statusEl.classList.add('text-danger');
@@ -659,47 +970,14 @@ function otherModelName() {
 }
 
 function onFilterChange() {
-  const selectedCode = $('filter').value;
-
-  
-  if (!selectedCode) {
-    currentFilter = null;
-    currentModelEntry = null;
-    $('feh').disabled = false;
-    refreshHints();   // show the selected model's bounds (Option A), not blank
-    return;
-  }
-
-  currentFilter = FILTERS.find(f => f.code === selectedCode);
-  if (!currentFilter) return;
-
-  
-  selectSupportedModel(currentFilter);
-
-  onModelChange();
-
-  
-  tryAutoCompute();
+  // v5: superseded by the single evaluator path. Kept as a thin alias so any
+  // remaining caller still triggers a refresh.
+  scoRefresh();
 }
 
 function onModelChange() {
-  if (!currentFilter) {
-    // No filter selected yet: still show the model's representative bounds.
-    currentModelEntry = null;
-    refreshHints();
-    return;
-  }
-  let entry = resolveModelEntry(currentFilter, $('model').value);
-
-  
-  if (!entry) {
-    // Same hazard as above: pick from the options this law actually offers.
-    selectSupportedModel(currentFilter);
-    entry = resolveModelEntry(currentFilter, $('model').value);
-  }
-
-  currentModelEntry = entry;
-  refreshHints();
+  // v5: superseded by the single evaluator path.
+  scoRefresh();
 }
 
 function signed(v) { return (v >= 0 ? '+' : '') + Number(v).toFixed(1); }
@@ -739,19 +1017,9 @@ function applyHintValues(e) {
 }
 
 function refreshHints() {
-  // Prefer the exact filter+model entry; fall back to a representative entry
-  // for the selected model when no filter is chosen yet.
-  let e = currentModelEntry;
-  if (!e) e = representativeModelEntry($('model').value);
-  applyHintValues(e);
-  // The feh field's disabled/solar-locked state follows the exact entry only
-  // (don't lock the field based on a representative entry before filter choice).
-  if (currentModelEntry && currentModelEntry.feh_fixed) {
-    $('feh').value = currentModelEntry.feh_min.toFixed(1);
-    $('feh').disabled = true;
-  } else if (currentModelEntry) {
-    $('feh').disabled = false;
-  }
+  // v5: superseded by scoRefresh, which recomputes every blurb from the
+  // evaluator. Kept as an alias for the lookup and law-change callers.
+  scoRefresh();
 }
 
 function setBusy(on, msg) {
@@ -960,8 +1228,9 @@ form.addEventListener('submit', async (ev) => {
     teff:   $('teff').value,
     logg:   $('logg').value,
     feh:    $('feh').value,
-    filter: currentFilter.code,
-    model:  currentModelEntry.model,
+    filter: $('filter').value,
+    model:  $('model').value,
+    xi:     $('xi').value,
   });
 
   setBusy(true, '');
@@ -1122,9 +1391,10 @@ $('exampleBtn').addEventListener('click', () => {
   $('teff').value = 5778;
   $('logg').value = 4.44;
   if (!$('feh').disabled) $('feh').value = 0.0;
-  $('model').value = 'ATLAS';
   $('filter').value = 'u*';
-  onFilterChange();
+  $('model').value = 'ATLAS';
+  const _xe = $('xi'); if (_xe) _xe.value = '2';
+  scoRefresh();
   statusEl.textContent = '';
   statusEl.classList.remove('text-danger', 'text-success');
   statusEl.classList.add('text-muted');
@@ -1135,8 +1405,9 @@ function blankForm() {
   $('logg').value = '';
   $('feh').value = '';
   $('filter').value = '';
-  $('model').value = 'ATLAS';
-  onFilterChange();
+  $('model').value = '';
+  const _xi = $('xi'); if (_xi) _xi.value = '';
+  scoRefresh();
   $('planetName').value = '';
   clearLookupStatus();
   lookupBaseline = null;
