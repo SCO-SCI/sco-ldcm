@@ -575,12 +575,44 @@ function scoEvaluate(state, capabilities) {
     return { available: [...avail], all: [...all] };
   }
 
+  /* Why is a given filter currently unavailable? Work out which choice is
+     actually responsible by relaxing one constraint at a time and seeing
+     whether that alone would make the filter reachable. The answer names the
+     specific setting to change, rather than saying only that it cannot be
+     used. */
+  const fmtXi = (v) => (v % 1 === 0 ? v.toFixed(0) : String(v));
+  function filterReason(code) {
+    const has = (skip) => grids.some(g => g.filter === code && ok(g, skip));
+    if (has(new Set(['filter']))) return null;              // it is available
+    const relaxModel = sel.modelKey !== null &&
+                       has(new Set(['filter', 'model']));
+    const relaxXi    = sel.xi !== null &&
+                       has(new Set(['filter', 'xi']));
+    if (relaxModel && !relaxXi) {
+      return `Unavailable with stellar model ${sel.model}`;
+    }
+    if (relaxXi && !relaxModel) {
+      return `Unavailable at \u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    if (relaxModel && relaxXi) {
+      // either change alone would work; name both so the user can pick one
+      return `Unavailable with stellar model ${sel.model} or at ` +
+             `\u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    if (has(new Set(['filter', 'model', 'xi']))) {
+      return `Unavailable with stellar model ${sel.model} at ` +
+             `\u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    return 'Unavailable';
+  }
+
   const fRaw = optionsFor('filter', 'filter');
   const filterOpts = fRaw.all
     .map(code => ({
       code,
       name: (capabilities.find(f => f.code === code) || {}).name,
       available: fRaw.available.includes(code),
+      reason: fRaw.available.includes(code) ? null : filterReason(code),
     }))
     .sort((a, b) => a.code.localeCompare(b.code));
   const mRaw = optionsFor('model', 'model');
@@ -790,10 +822,22 @@ function scoRefreshOnce() {
   /* --- filter dropdown: narrow to available codes, keep a blank placeholder */
   const filterSel = $('filter');
   const prevFilter = filterSel.value;
+  // An unavailable filter stays visible and unselectable, and its label names
+  // the setting that would make it reachable. The label replaces the grey-out
+  // as the explanation; the option is still disabled so it cannot be chosen.
+  //
+  // Display-only tidy-up: one filter's registered name carries a parenthetical
+  // gloss, "CBB (Blue Blocking Exoplanet)", which would render as
+  // "CBB (Blue Blocking Exoplanet) (CBB)". Trim it here rather than in the
+  // engine, because that name is served by the frozen /api/filters route and
+  // must not change there.
+  const shortName = (n) => String(n).replace(/\s*\(.*\)\s*$/, '');
   const filterOpts = [{ value: '', label: '\u2014 Select a filter \u2014' }]
     .concat(f.filter.options.map(o => ({
       value: o.code,
-      label: `${o.name} (${o.code})`,
+      label: o.available
+        ? `${shortName(o.name)} (${o.code})`
+        : `${shortName(o.name)} (${o.code}) \u2014 ${o.reason}`,
       disabled: !o.available,
     })));
   scoFillSelect(filterSel, filterOpts, null, prevFilter);
