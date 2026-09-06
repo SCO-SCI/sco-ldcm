@@ -613,8 +613,10 @@ function scoEvaluate(state, capabilities) {
       name: (capabilities.find(f => f.code === code) || {}).name,
       available: fRaw.available.includes(code),
       reason: fRaw.available.includes(code) ? null : filterReason(code),
-    }))
-    .sort((a, b) => a.code.localeCompare(b.code));
+    }));
+  // No sort: the capability list already arrives in the registry's own order,
+  // which is the physical ordering the page has always shown (U, B, V, R, I,
+  // J, H, K rather than alphabetical). Sorting would scramble it.
   const mRaw = optionsFor('model', 'model');
   const modelOpts = mRaw.all.map(m => ({ value: m, available: mRaw.available.includes(m) }));
   const xRaw = optionsFor('xi', 'xi');
@@ -832,15 +834,44 @@ function scoRefreshOnce() {
   // engine, because that name is served by the frozen /api/filters route and
   // must not change there.
   const shortName = (n) => String(n).replace(/\s*\(.*\)\s*$/, '');
-  const filterOpts = [{ value: '', label: '\u2014 Select a filter \u2014' }]
-    .concat(f.filter.options.map(o => ({
-      value: o.code,
-      label: o.available
+
+  // Rebuild the filter dropdown grouped under its category headings, in the
+  // order the law declares, as the pre-v5 page did.
+  filterSel.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value = ''; ph.textContent = '\u2014 Select a filter \u2014';
+  filterSel.appendChild(ph);
+
+  const catOf = {};
+  for (const c of caps) catOf[c.code] = c.category;
+  const byCat = new Map();
+  for (const o of f.filter.options) {
+    const cat = (catOf[o.code] || 'Other');
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push(o);
+  }
+  const order = (LAW_CONFIG[currentLaw] && LAW_CONFIG[currentLaw].catOrder) || [];
+  const cats = order.filter(c => byCat.has(c))
+    .concat([...byCat.keys()].filter(c => !order.includes(c)));
+  for (const cat of cats) {
+    const og = document.createElement('optgroup');
+    og.label = cat;
+    for (const o of byCat.get(cat)) {
+      const opt = document.createElement('option');
+      opt.value = o.code;
+      opt.textContent = o.available
         ? `${shortName(o.name)} (${o.code})`
-        : `${shortName(o.name)} (${o.code}) \u2014 ${o.reason}`,
-      disabled: !o.available,
-    })));
-  scoFillSelect(filterSel, filterOpts, null, prevFilter);
+        : `${shortName(o.name)} (${o.code}) \u2014 ${o.reason}`;
+      if (!o.available) opt.disabled = true;
+      og.appendChild(opt);
+    }
+    filterSel.appendChild(og);
+  }
+  // Restore the selection: the anchor field keeps its value even if momentarily
+  // unavailable; otherwise fall back to the placeholder.
+  const wanted = prevFilter;
+  const found = Array.from(filterSel.options).some(o => o.value === wanted);
+  filterSel.value = found ? wanted : '';
 
   /* --- model dropdown. Blank placeholder until chosen, unless locked to one. */
   const modelSel = $('model');
