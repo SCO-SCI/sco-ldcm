@@ -617,8 +617,40 @@ function scoEvaluate(state, capabilities) {
   // No sort: the capability list already arrives in the registry's own order,
   // which is the physical ordering the page has always shown (U, B, V, R, I,
   // J, H, K rather than alphabetical). Sorting would scramble it.
+  /* Why is a given model currently unavailable? Mirror of filterReason: relax
+     one constraint at a time and see which single change would make the model
+     reachable, so the label can name the setting to alter. */
+  function modelReason(name) {
+    // Match on the DISPLAY name, not the underlying key. PHOENIX and
+    // PHOENIX-COND share one key, so keying on it would report a grid as
+    // reachable under a label the current filter does not actually offer.
+    const has = (skip) => grids.some(g => g.model === name && ok(g, skip));
+    if (has(new Set(['model']))) return null;               // it is available
+    const relaxFilter = sel.filter !== null && has(new Set(['model', 'filter']));
+    const relaxXi     = sel.xi !== null && has(new Set(['model', 'xi']));
+    if (relaxFilter && !relaxXi) {
+      return `Unavailable with filter ${sel.filter}`;
+    }
+    if (relaxXi && !relaxFilter) {
+      return `Unavailable at \u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    if (relaxFilter && relaxXi) {
+      return `Unavailable with filter ${sel.filter} or at ` +
+             `\u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    if (has(new Set(['model', 'filter', 'xi']))) {
+      return `Unavailable with filter ${sel.filter} at ` +
+             `\u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    return 'Unavailable';
+  }
+
   const mRaw = optionsFor('model', 'model');
-  const modelOpts = mRaw.all.map(m => ({ value: m, available: mRaw.available.includes(m) }));
+  const modelOpts = mRaw.all.map(m => ({
+    value: m,
+    available: mRaw.available.includes(m),
+    reason: mRaw.available.includes(m) ? null : modelReason(m),
+  }));
   const xRaw = optionsFor('xi', 'xi');
   const xiOpts = xRaw.all.sort((a, b) => a - b)
     .map(v => ({ value: v, available: xRaw.available.includes(v) }));
@@ -645,10 +677,12 @@ function scoEvaluate(state, capabilities) {
 
   // A discrete field locks when exactly one option remains; it then reports the
   // reason implicitly through the blurb (single value), never through a message.
-  function discreteField(opts, current, valueKey) {
+  function discreteField(opts, current, valueKey, neverLock) {
     const avail = opts.filter(o => o.available)
                       .map(o => (valueKey ? o[valueKey] : o.value));
-    const locked = avail.length === 1;
+    // neverLock: the field keeps showing every option, with the unavailable
+    // ones tagged and disabled, rather than collapsing to a single greyed value.
+    const locked = !neverLock && avail.length === 1;
     return {
       options: opts,          // full universe, each flagged available or not
       available: avail,       // just the selectable values
@@ -661,7 +695,7 @@ function scoEvaluate(state, capabilities) {
 
   const fields = {
     filter: discreteField(filterOpts, sel.filter, 'code'),
-    model:  discreteField(modelOpts, sel.model, null),
+    model:  discreteField(modelOpts, sel.model, null, true),
     xi:     discreteField(xiOpts, sel.xi, null),
     teff:   { range: teffRange, locked: false,
               blurb: teffRange ? `${teffRange.min} – ${teffRange.max} K` : '—' },
@@ -873,16 +907,18 @@ function scoRefreshOnce() {
   const found = Array.from(filterSel.options).some(o => o.value === wanted);
   filterSel.value = found ? wanted : '';
 
-  /* --- model dropdown. Blank placeholder until chosen, unless locked to one. */
+  /* --- model dropdown. Every model stays listed at all times; the ones the
+     current filter or velocity rules out are tagged with the reason and cannot
+     be selected. The field itself is never disabled, so the user can always see
+     the full set and read why a choice is closed. */
   const modelSel = $('model');
-  let modelOpts = f.model.options.map(o => ({
-    value: o.value, label: o.value, disabled: !o.available,
+  const modelOpts = f.model.options.map(o => ({
+    value: o.value,
+    label: o.available ? o.value : `${o.value} \u2014 ${o.reason}`,
+    disabled: !o.available,
   }));
-  if (!f.model.locked) {
-    modelOpts = [{ value: '', label: '\u2014 Select a model \u2014' }].concat(modelOpts);
-  }
   scoFillSelect(modelSel, modelOpts, null, modelSel.value);
-  modelSel.disabled = f.model.locked;
+  modelSel.disabled = false;
 
   /* --- velocity dropdown. A blank placeholder until the user chooses, unless
      the field has locked to a single value (then show just that value). */
