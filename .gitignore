@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 .DS_Store
+v5_verify_*.py
+v5_step*_verify.py

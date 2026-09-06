@@ -209,6 +209,13 @@ def filters(
     return {"filters": ldc_core.get_available_filters(xi)}
 
 
+@app.get("/api/capabilities")
+def capabilities() -> dict:
+    # Full (filter, model, velocity) map for the input-validation UI.
+    # Not filtered by any current choice; the browser narrows against it.
+    return {"capabilities": ldc_core.get_capabilities()}
+
+
 @app.get("/api/compute")
 def compute(
     teff: float = Query(..., description="Effective temperature in K"),

@@ -370,6 +370,51 @@ def _resolve_table_key(filter_code: str, model: str,
     return (source, filter_code, _norm_xi(xi), storage_model)
 
 
+def get_capabilities() -> List[Dict]:
+    """Full capability map for the input-validation evaluator.
+
+    Unlike get_available_filters, which returns one velocity, this lists every
+    (filter, model, velocity) grid the law holds, each with its axis ranges.
+    The frontend narrows against this; it is not filtered by any current choice.
+    Ranges are the advertised endpoints only -- the interior of a grid may be
+    ragged, which the service enforces at compute time (never the browser).
+    """
+    out: List[Dict] = []
+    for f in FILTER_REGISTRY:
+        code = f["code"]
+        source = f["source"]
+        entries: List[Dict] = []
+        for storage_model in EXPECTED_MODELS[source]:
+            for xi in SUPPORTED_XI:
+                grid = _TABLES.get((source, code, _norm_xi(xi), storage_model))
+                if grid is None:
+                    continue
+                teffs = grid["teffs"]   # type: ignore[index]
+                loggs = grid["loggs"]   # type: ignore[index]
+                fehs  = grid["fehs"]    # type: ignore[index]
+                entries.append({
+                    "model":     _display_model(code, storage_model),
+                    "model_key": storage_model,
+                    "xi":        _norm_xi(xi),
+                    "teff_min": teffs[0], "teff_max": teffs[-1],
+                    "logg_min": loggs[0], "logg_max": loggs[-1],
+                    "feh_min":  fehs[0],  "feh_max":  fehs[-1],
+                    "feh_fixed": (len(fehs) == 1),
+                    "n_points": len(grid["data"]),   # type: ignore[arg-type]
+                })
+        if not entries:
+            continue
+        out.append({
+            "code": code,
+            "name": f["name"],
+            "category": f["category"],
+            "source": source,
+            "citation": SOURCE_CITATIONS[source],
+            "grids": entries,
+        })
+    return out
+
+
 def get_available_filters(xi: float = DEFAULT_XI) -> List[Dict]:
     
     out: List[Dict] = []
