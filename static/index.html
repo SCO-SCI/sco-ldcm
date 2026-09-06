@@ -285,7 +285,7 @@
           </div>
           <div class="col-6">
             <label for="xi" class="form-label">
-              Microturb. ξ (km/s)<span class="hint" id="xiHint">&nbsp;</span>
+              Microturb. ξ<span class="hint" id="xiHint">&nbsp;</span>
             </label>
             <select class="form-select" id="xi" name="xi"></select>
           </div>
@@ -633,7 +633,15 @@ function scoEvaluate(state, capabilities) {
   // Blurbs for the discrete fields: the remaining options, or the single value.
   fields.filter.blurb = fields.filter.options.length +
     (fields.filter.options.length === 1 ? ' filter' : ' filters');
-  fields.model.blurb  = fields.model.options.join(', ') || '—';
+  // Count when several remain, the actual name when narrowed to one. Listing
+  // every model ("ATLAS, PHOENIX, PHOENIX-COND") wraps to a second line at half
+  // width, which pushes this field's dropdown out of line with the one beside
+  // it. A count cannot wrap. Matches how the filter blurb already reads.
+  fields.model.blurb  = fields.model.options.length === 1
+    ? fields.model.options[0]
+    : (fields.model.options.length
+        ? fields.model.options.length + ' models'
+        : '—');
   fields.xi.blurb     = fields.xi.options.length
     ? fields.xi.options.map(v => (v % 1 === 0 ? v.toFixed(0) : v)).join(', ')
     : '—';
