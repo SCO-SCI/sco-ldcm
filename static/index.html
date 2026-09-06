@@ -280,7 +280,7 @@
               Stellar model<span class="hint" id="modelHint">&nbsp;</span>
             </label>
             <select class="form-select" id="model" name="model">
-              <option value="" selected>— Select a model —</option>
+              <option value="ATLAS" selected>ATLAS</option>
             </select>
           </div>
           <div class="col-6">
@@ -562,20 +562,32 @@ function scoEvaluate(state, capabilities) {
     return true;
   }
 
-  // For a discrete field, the options are the distinct values it could take
-  // while every OTHER selected constraint still holds.
+  // For a discrete field: the values it could take while every OTHER selected
+  // constraint holds (available), and the full universe the law offers (all).
+  // Unavailable entries stay visible in the dropdown, greyed and unselectable,
+  // so a user can see that e.g. TESS exists but needs a different model.
   function optionsFor(field, key) {
     const skip = new Set([field]);
-    const vals = new Set();
-    for (const g of grids) if (ok(g, skip)) vals.add(g[key]);
-    return [...vals];
+    const avail = new Set();
+    for (const g of grids) if (ok(g, skip)) avail.add(g[key]);
+    const all = new Set();
+    for (const g of grids) all.add(g[key]);
+    return { available: [...avail], all: [...all] };
   }
 
-  const filterOpts = optionsFor('filter', 'filter')
-    .map(code => ({ code, name: (capabilities.find(f => f.code === code) || {}).name }))
+  const fRaw = optionsFor('filter', 'filter');
+  const filterOpts = fRaw.all
+    .map(code => ({
+      code,
+      name: (capabilities.find(f => f.code === code) || {}).name,
+      available: fRaw.available.includes(code),
+    }))
     .sort((a, b) => a.code.localeCompare(b.code));
-  const modelOpts = optionsFor('model', 'model');
-  const xiOpts    = optionsFor('xi', 'xi').sort((a, b) => a - b);
+  const mRaw = optionsFor('model', 'model');
+  const modelOpts = mRaw.all.map(m => ({ value: m, available: mRaw.available.includes(m) }));
+  const xRaw = optionsFor('xi', 'xi');
+  const xiOpts = xRaw.all.sort((a, b) => a - b)
+    .map(v => ({ value: v, available: xRaw.available.includes(v) }));
 
   // Continuous field ranges: the envelope of grids that satisfy every OTHER
   // constraint. Endpoints only -- the interior may be ragged (C5, service-owned).
@@ -600,15 +612,16 @@ function scoEvaluate(state, capabilities) {
   // A discrete field locks when exactly one option remains; it then reports the
   // reason implicitly through the blurb (single value), never through a message.
   function discreteField(opts, current, valueKey) {
-    const values = valueKey ? opts.map(o => o[valueKey]) : opts;
-    const locked = values.length === 1;
+    const avail = opts.filter(o => o.available)
+                      .map(o => (valueKey ? o[valueKey] : o.value));
+    const locked = avail.length === 1;
     return {
-      options: opts,
+      options: opts,          // full universe, each flagged available or not
+      available: avail,       // just the selectable values
       locked,
-      value: locked ? values[0] : current,
-      // current selection is invalid if it is set but not among the options
+      value: locked ? avail[0] : current,
       invalid: current !== null && current !== undefined && current !== '' &&
-               !values.includes(valueKey ? current : current),
+               !avail.includes(current),
     };
   }
 
@@ -631,19 +644,19 @@ function scoEvaluate(state, capabilities) {
   };
 
   // Blurbs for the discrete fields: the remaining options, or the single value.
-  fields.filter.blurb = fields.filter.options.length +
-    (fields.filter.options.length === 1 ? ' filter' : ' filters');
+  fields.filter.blurb = fields.filter.available.length +
+    (fields.filter.available.length === 1 ? ' filter' : ' filters');
   // Count when several remain, the actual name when narrowed to one. Listing
   // every model ("ATLAS, PHOENIX, PHOENIX-COND") wraps to a second line at half
   // width, which pushes this field's dropdown out of line with the one beside
   // it. A count cannot wrap. Matches how the filter blurb already reads.
-  fields.model.blurb  = fields.model.options.length === 1
-    ? fields.model.options[0]
-    : (fields.model.options.length
-        ? fields.model.options.length + ' models'
+  fields.model.blurb  = fields.model.available.length === 1
+    ? fields.model.available[0]
+    : (fields.model.available.length
+        ? fields.model.available.length + ' models'
         : '—');
-  fields.xi.blurb     = fields.xi.options.length
-    ? fields.xi.options.map(v => (v % 1 === 0 ? v.toFixed(0) : v)).join(', ')
+  fields.xi.blurb     = fields.xi.available.length
+    ? fields.xi.available.map(v => (v % 1 === 0 ? v.toFixed(0) : v)).join(', ')
     : '—';
 
   // Can we submit? Every discrete field must resolve to exactly one grid, and
@@ -670,6 +683,12 @@ function scoEvaluate(state, capabilities) {
    C5 (whether an exact point has data) stays with the service and surfaces as
    a refusal in the #status area.
    ========================================================================== */
+
+const SCO_DEFAULT_XI = 2;
+
+/* The id of the field the user last changed. It is authoritative during
+   settling: everything else adjusts around it. */
+let SCO_ANCHOR = null;
 
 /* Capability data per law, fetched once and cached for the session. */
 const SCO_CAPS = {};   // law -> capabilities array
@@ -718,20 +737,49 @@ function scoFillSelect(sel, options, labelOf, keep) {
     const opt = document.createElement('option');
     opt.value = o.value;
     opt.textContent = o.label;
+    // Unavailable entries stay visible but greyed and unselectable, so a user
+    // can see that a choice exists and needs a different setting to reach.
+    if (o.disabled) opt.disabled = true;
     sel.appendChild(opt);
   }
-  if (options.some(o => o.value === prev)) {
+  // The field the user just touched is authoritative and keeps its value even
+  // while it is momentarily unavailable, because it is the choice that is about
+  // to make the other fields correct themselves. Every other field holding a
+  // now-unavailable value is moved onto a selectable one.
+  const isAnchor = (sel.id === SCO_ANCHOR);
+  const selectable = options.filter(o => !o.disabled);
+  if (isAnchor && options.some(o => o.value === prev)) {
     sel.value = prev;
-  } else if (options.length) {
-    sel.value = options[0].value;
+  } else if (selectable.some(o => o.value === prev)) {
+    sel.value = prev;
+  } else if (selectable.length) {
+    sel.value = selectable[0].value;
   }
   return sel.value;
 }
 
-/* The one render pass. Called after any field changes. */
+/* The one render pass. Called after any field changes.
+
+   It runs to a fixed point. One pass is not always enough: setting a filter can
+   force the model, and the corrected model changes which velocities are open.
+   Rendering once would leave the velocity dropdown computed from the stale
+   model. Looping until the state stops changing removes that ordering problem
+   entirely, and it terminates because every pass either locks a field or leaves
+   everything alone. The cap is a safety net, not an expected path. */
 let SCO_CAPS_CURRENT = [];
 
 function scoRefresh() {
+  let before = '';
+  for (let pass = 0; pass < 6; pass++) {
+    scoRefreshOnce();
+    const after = [$('filter').value, $('model').value, $('xi').value,
+                   $('feh').value, $('feh').disabled].join('|');
+    if (after === before) return;
+    before = after;
+  }
+}
+
+function scoRefreshOnce() {
   const caps = SCO_CAPS_CURRENT;
   if (!caps || !caps.length) return;
 
@@ -743,12 +791,18 @@ function scoRefresh() {
   const filterSel = $('filter');
   const prevFilter = filterSel.value;
   const filterOpts = [{ value: '', label: '\u2014 Select a filter \u2014' }]
-    .concat(f.filter.options.map(o => ({ value: o.code, label: `${o.name} (${o.code})` })));
+    .concat(f.filter.options.map(o => ({
+      value: o.code,
+      label: `${o.name} (${o.code})`,
+      disabled: !o.available,
+    })));
   scoFillSelect(filterSel, filterOpts, null, prevFilter);
 
   /* --- model dropdown. Blank placeholder until chosen, unless locked to one. */
   const modelSel = $('model');
-  let modelOpts = f.model.options.map(m => ({ value: m, label: m }));
+  let modelOpts = f.model.options.map(o => ({
+    value: o.value, label: o.value, disabled: !o.available,
+  }));
   if (!f.model.locked) {
     modelOpts = [{ value: '', label: '\u2014 Select a model \u2014' }].concat(modelOpts);
   }
@@ -758,14 +812,22 @@ function scoRefresh() {
   /* --- velocity dropdown. A blank placeholder until the user chooses, unless
      the field has locked to a single value (then show just that value). */
   const xiSel = $('xi');
-  let xiOpts = f.xi.options.map(v => ({
-    value: String(v),
-    label: (v % 1 === 0 ? v.toFixed(0) : String(v)) + ' km/s',
+  let xiOpts = f.xi.options.map(o => ({
+    value: String(o.value),
+    label: (o.value % 1 === 0 ? o.value.toFixed(0) : String(o.value)) + ' km/s',
+    disabled: !o.available,
   }));
   if (!f.xi.locked) {
     xiOpts = [{ value: '', label: '\u2014 Select \u03be \u2014' }].concat(xiOpts);
   }
-  scoFillSelect(xiSel, xiOpts, null, xiSel.value);
+  // Default to 2 km/s when nothing has been chosen yet. This has to happen here
+  // rather than in applyLaw: on first load applyLaw runs before this dropdown
+  // has any options, so setting its value there selects nothing.
+  let xiKeep = xiSel.value;
+  if (xiKeep === '' && f.xi.available.includes(SCO_DEFAULT_XI)) {
+    xiKeep = String(SCO_DEFAULT_XI);
+  }
+  scoFillSelect(xiSel, xiOpts, null, xiKeep);
   xiSel.disabled = f.xi.locked;
 
   /* --- continuous fields: blurbs, and the solar lock on metallicity */
@@ -793,8 +855,8 @@ function scoWireValidation() {
   ['filter', 'model', 'xi', 'teff', 'logg', 'feh'].forEach(id => {
     const el = $(id);
     if (el && !el.dataset.scoWired) {
-      el.addEventListener('change', () => { scoRefresh(); tryAutoCompute(); });
-      el.addEventListener('input',  () => { scoRefresh(); });
+      el.addEventListener('change', () => { SCO_ANCHOR = id; scoRefresh(); SCO_ANCHOR = null; tryAutoCompute(); });
+      el.addEventListener('input',  () => { SCO_ANCHOR = id; scoRefresh(); SCO_ANCHOR = null; });
       el.dataset.scoWired = '1';   // guard against the historic listener leak
     }
   });
@@ -881,11 +943,11 @@ async function applyLaw() {
       opt.value = val; opt.textContent = label;
       modelSel.appendChild(opt);
     });
-    modelSel.value = "";
+    modelSel.value = "ATLAS";
   }
-  // v5: a law switch starts the new law fully blank -- clear any stale filter
-  // and velocity so nothing is pre-narrowed from the previous law.
-  const _xiSel = $("xi"); if (_xiSel) _xiSel.value = "";
+  // v5: a law switch resets to the defaults -- ATLAS at 2 km/s, no filter --
+  // so nothing is pre-narrowed by a leftover choice from the previous law.
+  const _xiSel = $("xi"); if (_xiSel) _xiSel.value = "2";
   const _fSel = $("filter"); if (_fSel) _fSel.value = "";
   // Reload filters from the selected law's backend
   await loadFilters();
@@ -1413,8 +1475,8 @@ function blankForm() {
   $('logg').value = '';
   $('feh').value = '';
   $('filter').value = '';
-  $('model').value = '';
-  const _xi = $('xi'); if (_xi) _xi.value = '';
+  $('model').value = 'ATLAS';
+  const _xi = $('xi'); if (_xi) _xi.value = '2';
   scoRefresh();
   $('planetName').value = '';
   clearLookupStatus();
