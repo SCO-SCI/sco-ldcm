@@ -651,9 +651,37 @@ function scoEvaluate(state, capabilities) {
     available: mRaw.available.includes(m),
     reason: mRaw.available.includes(m) ? null : modelReason(m),
   }));
+  /* Why is a given velocity unavailable? Same relax-one-constraint technique,
+     naming the model or the filter responsible. In practice this is almost
+     always the model: ATLAS carries all five velocities and every
+     PHOENIX-family model carries only 2. */
+  function xiReason(value) {
+    const has = (skip) => grids.some(g => g.xi === value && ok(g, skip));
+    if (has(new Set(['xi']))) return null;                  // it is available
+    const relaxModel  = sel.model !== null && has(new Set(['xi', 'model']));
+    const relaxFilter = sel.filter !== null && has(new Set(['xi', 'filter']));
+    if (relaxModel && !relaxFilter) {
+      return `Unavailable with model ${sel.model}`;
+    }
+    if (relaxFilter && !relaxModel) {
+      return `Unavailable with filter ${sel.filter}`;
+    }
+    if (relaxModel && relaxFilter) {
+      return `Unavailable with model ${sel.model} or filter ${sel.filter}`;
+    }
+    if (has(new Set(['xi', 'model', 'filter']))) {
+      return `Unavailable with model ${sel.model} and filter ${sel.filter}`;
+    }
+    return 'Unavailable';
+  }
+
   const xRaw = optionsFor('xi', 'xi');
   const xiOpts = xRaw.all.sort((a, b) => a - b)
-    .map(v => ({ value: v, available: xRaw.available.includes(v) }));
+    .map(v => ({
+      value: v,
+      available: xRaw.available.includes(v),
+      reason: xRaw.available.includes(v) ? null : xiReason(v),
+    }));
 
   // Continuous field ranges: the envelope of grids that satisfy every OTHER
   // constraint. Endpoints only -- the interior may be ragged (C5, service-owned).
@@ -696,7 +724,7 @@ function scoEvaluate(state, capabilities) {
   const fields = {
     filter: discreteField(filterOpts, sel.filter, 'code'),
     model:  discreteField(modelOpts, sel.model, null, true),
-    xi:     discreteField(xiOpts, sel.xi, null),
+    xi:     discreteField(xiOpts, sel.xi, null, true),
     teff:   { range: teffRange, locked: false,
               blurb: teffRange ? `${teffRange.min} – ${teffRange.max} K` : '—' },
     logg:   { range: loggRange, locked: false,
@@ -920,17 +948,18 @@ function scoRefreshOnce() {
   scoFillSelect(modelSel, modelOpts, null, modelSel.value);
   modelSel.disabled = false;
 
-  /* --- velocity dropdown. A blank placeholder until the user chooses, unless
-     the field has locked to a single value (then show just that value). */
+  /* --- velocity dropdown. Every value stays listed at all times; the ones the
+     current model or filter rules out are tagged with the reason and cannot be
+     selected. The field itself is never disabled. */
   const xiSel = $('xi');
-  let xiOpts = f.xi.options.map(o => ({
+  const xiNum = (n) => (n % 1 === 0 ? n.toFixed(0) : String(n));
+  const xiOpts = f.xi.options.map(o => ({
     value: String(o.value),
-    label: (o.value % 1 === 0 ? o.value.toFixed(0) : String(o.value)) + ' km/s',
+    label: o.available
+      ? `${xiNum(o.value)} km/s`
+      : `${xiNum(o.value)} km/s \u2014 ${o.reason}`,
     disabled: !o.available,
   }));
-  if (!f.xi.locked) {
-    xiOpts = [{ value: '', label: '\u2014 Select \u03be \u2014' }].concat(xiOpts);
-  }
   // Default to 2 km/s when nothing has been chosen yet. This has to happen here
   // rather than in applyLaw: on first load applyLaw runs before this dropdown
   // has any options, so setting its value there selects nothing.
@@ -939,7 +968,7 @@ function scoRefreshOnce() {
     xiKeep = String(SCO_DEFAULT_XI);
   }
   scoFillSelect(xiSel, xiOpts, null, xiKeep);
-  xiSel.disabled = f.xi.locked;
+  xiSel.disabled = false;
 
   /* --- continuous fields: blurbs, and the solar lock on metallicity */
   $('teffHint').textContent = f.teff.blurb;
