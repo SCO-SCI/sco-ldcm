@@ -146,7 +146,19 @@ def _legacy_compute(
     return result
 
 
-app.add_api_route("/api/health", _quad_health, methods=["GET", "HEAD"])
+def _legacy_health() -> dict:
+    # Same principle as the two wrappers above: the legacy payload must not
+    # change. The quadratic engine's own health reports the rows it loaded,
+    # which from v5 onward span all five velocities, so the numbers grew.
+    # The frozen route keeps reporting the 2 km/s counts, recomputed from the
+    # loaded grids rather than hard-coded, so they stay right if a table is
+    # ever replaced. Every other field is passed through untouched.
+    result = dict(_quad_health())
+    result["tables"] = _quad_ldc_core.row_counts_at_xi(_quad_ldc_core.DEFAULT_XI)
+    return result
+
+
+app.add_api_route("/api/health", _legacy_health, methods=["GET", "HEAD"])
 app.add_api_route("/api/filters", _legacy_filters, methods=["GET"])
 app.add_api_route("/api/compute", _legacy_compute, methods=["GET"])
 app.add_api_route("/api/resolve", _quad_resolve, methods=["GET"])

@@ -452,6 +452,37 @@ def get_available_filters(xi: float = DEFAULT_XI) -> List[Dict]:
     return out
 
 
+def row_counts_at_xi(xi: float = DEFAULT_XI) -> Dict[str, int]:
+    """Row counts per source file, counting only the grids at one velocity.
+
+    The pre-v5 service loaded the 2 km/s rows alone, so its health route
+    reported those counts. v5 loads every velocity and LOAD_COUNTS grew
+    accordingly. The frozen legacy /api/health must keep reporting what it
+    always did, so it calls this with the default velocity. The file names
+    and their order mirror _parse_all exactly; C2021 is split across two
+    files by model.
+    """
+    x = _norm_xi(xi)
+    files = [
+        ("tableab.dat",      "CB2011",  None),
+        ("table5.dat",       "C2018",   None),
+        ("CBBQUADRATIC.txt", "CMG2022", None),
+        ("table2.dat",       "C2021",   "PHOENIX"),
+        ("table8.dat",       "C2021",   "ATLAS"),
+    ]
+    counts: Dict[str, int] = {}
+    for fname, source, only_model in files:
+        n = 0
+        for (src, _code, gxi, storage_model), grid in _TABLES.items():
+            if src != source or gxi != x:
+                continue
+            if only_model is not None and storage_model != only_model:
+                continue
+            n += len(grid["data"])   # type: ignore[arg-type]
+        counts[fname] = n
+    return counts
+
+
 
 
 def _bracket(axis: List[float], x: float) -> Tuple[int, int, float]:
