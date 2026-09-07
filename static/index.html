@@ -589,18 +589,24 @@ function scoEvaluate(state, capabilities) {
     const relaxXi    = sel.xi !== null &&
                        has(new Set(['filter', 'xi']));
     if (relaxModel && !relaxXi) {
-      return `Unavailable with stellar model ${sel.model}`;
+      return `Unavailable with model ${sel.model}`;
     }
     if (relaxXi && !relaxModel) {
       return `Unavailable at \u03be = ${fmtXi(sel.xi)} km/s`;
     }
+    /* Wording rule for the two-setting cases, shared by all three dropdowns:
+       when EACH setting alone blocks the option (so both must change), join
+       them with "or": the option is unavailable under either condition.
+       When only the COMBINATION blocks it (so changing either one would open
+       it), name the combination with no conjunction. */
     if (relaxModel && relaxXi) {
-      // either change alone would work; name both so the user can pick one
-      return `Unavailable with stellar model ${sel.model} or at ` +
+      // only the combination blocks it; either change alone would open it
+      return `Unavailable with model ${sel.model} at ` +
              `\u03be = ${fmtXi(sel.xi)} km/s`;
     }
     if (has(new Set(['filter', 'model', 'xi']))) {
-      return `Unavailable with stellar model ${sel.model} at ` +
+      // each setting alone blocks it; both must change
+      return `Unavailable with model ${sel.model} or at ` +
              `\u03be = ${fmtXi(sel.xi)} km/s`;
     }
     return 'Unavailable';
@@ -635,11 +641,13 @@ function scoEvaluate(state, capabilities) {
       return `Unavailable at \u03be = ${fmtXi(sel.xi)} km/s`;
     }
     if (relaxFilter && relaxXi) {
-      return `Unavailable with filter ${sel.filter} or at ` +
+      // only the combination blocks it; either change alone would open it
+      return `Unavailable with filter ${sel.filter} at ` +
              `\u03be = ${fmtXi(sel.xi)} km/s`;
     }
     if (has(new Set(['model', 'filter', 'xi']))) {
-      return `Unavailable with filter ${sel.filter} at ` +
+      // each setting alone blocks it; both must change (see rule above)
+      return `Unavailable with filter ${sel.filter} or at ` +
              `\u03be = ${fmtXi(sel.xi)} km/s`;
     }
     return 'Unavailable';
@@ -667,10 +675,13 @@ function scoEvaluate(state, capabilities) {
       return `Unavailable with filter ${sel.filter}`;
     }
     if (relaxModel && relaxFilter) {
-      return `Unavailable with model ${sel.model} or filter ${sel.filter}`;
+      // only the combination blocks it; either change alone would open it
+      return `Unavailable with model ${sel.model} together with ` +
+             `filter ${sel.filter}`;
     }
     if (has(new Set(['xi', 'model', 'filter']))) {
-      return `Unavailable with model ${sel.model} and filter ${sel.filter}`;
+      // each setting alone blocks it; both must change (see rule above)
+      return `Unavailable with model ${sel.model} or filter ${sel.filter}`;
     }
     return 'Unavailable';
   }
