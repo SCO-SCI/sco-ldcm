@@ -36,9 +36,8 @@
   h2 { font-size: 1rem; font-weight: 600; }
   .hint { color: #4c555d; font-weight: 400; font-size: 0.72rem; margin-left: 0.3rem; }  
   .hint.tic-note { color: #5474a5 !important; font-weight: 600; margin-left: 0; }
-  /* v5: a kept choice or typed value that the current combination cannot serve */
-  .sco-invalid { border-color: #b02a37 !important; box-shadow: 0 0 0 0.12rem rgba(176,42,55,0.22); }
-  .hint.sco-invalid-hint { color: #b02a37; font-weight: 600; }
+  /* v5: informational note in the message area when the page changed a choice for the user */
+  #status.sco-note { color: #001f5b; font-weight: 600; }
   label.form-label { font-size: 0.8rem; font-weight: 500; margin-bottom: 0.1rem; }
   .form-control, .form-select { font-size: 0.825rem; padding: 0.25rem 0.5rem; border-color: #4c555d; border-radius: 0.2rem; }
   .form-control:focus, .form-select:focus { border-color: #000; box-shadow: 0 0 0 0.2rem rgba(0,31,91,0.15); }
@@ -550,13 +549,6 @@ function scoEvaluate(state, capabilities) {
     logg:   num(state.logg),
     feh:    num(state.feh),
   };
-  // The text as typed, for tags that name a typed value as the cause. Falls
-  // back to the number when a caller passes numbers only.
-  const asTyped = (text, n) => (text !== undefined && text !== null && String(text).trim() !== '')
-    ? String(text).trim() : (n === null ? '' : String(n));
-  sel.teffText = asTyped(state.teffText, sel.teff);
-  sel.loggText = asTyped(state.loggText, sel.logg);
-  sel.fehText  = asTyped(state.fehText,  sel.feh);
 
   // Does a grid satisfy every selected constraint EXCEPT the ones named in skip?
   function ok(g, skip) {
@@ -567,7 +559,11 @@ function scoEvaluate(state, capabilities) {
         (sel.teff < g.teff_min || sel.teff > g.teff_max)) return false;
     if (!skip.has('logg')   && sel.logg   !== null &&
         (sel.logg < g.logg_min || sel.logg > g.logg_max)) return false;
-    if (!skip.has('feh')    && sel.feh    !== null &&
+    // A solar-only grid is not closed by a typed or looked-up metallicity.
+    // Choosing it locks the field to solar and the message area says the
+    // entered value was set aside. Grids with a real metallicity axis are
+    // still bounded by it.
+    if (!skip.has('feh')    && sel.feh    !== null && !g.feh_fixed &&
         (sel.feh < g.feh_min || sel.feh > g.feh_max)) return false;
     return true;
   }
@@ -585,76 +581,42 @@ function scoEvaluate(state, capabilities) {
     return { available: [...avail], all: [...all] };
   }
 
-  /* Why is a given option unavailable? One explainer serves all three
-     dropdowns. It relaxes the OTHER selected settings, dropdowns and typed
-     values alike, and reports the smallest change that would open the option,
-     so the tag names the specific setting to alter rather than saying only
-     that the option cannot be used.
-
-     Wording rule, shared by every dropdown:
-       - one setting alone would open it      -> name it
-           "Unavailable with model ATLAS"
-       - several settings would EACH open it  -> only the combination blocks;
-                                                 name them with no conjunction
-           "Unavailable with model ATLAS at Teff = 3000 K"
-       - no single setting opens it           -> find the smallest set that
-                                                 must change together; each of
-                                                 them alone blocks, so join
-                                                 them with "or"
-           "Unavailable with model ATLAS or at \u03be = 8 km/s"
-     Settings are always named in the same order: model, filter, velocity,
-     Teff, log g, [Fe/H]. */
+  /* Why is a given filter currently unavailable? Work out which choice is
+     actually responsible by relaxing one constraint at a time and seeing
+     whether that alone would make the filter reachable. The answer names the
+     specific setting to change, rather than saying only that it cannot be
+     used. */
   const fmtXi = (v) => (v % 1 === 0 ? v.toFixed(0) : String(v));
-  const CONSTRAINTS = [
-    ['model',  () => sel.modelKey !== null, () => `with model ${sel.model}`],
-    ['filter', () => sel.filter   !== null, () => `with filter ${sel.filter}`],
-    ['xi',     () => sel.xi       !== null, () => `at \u03be = ${fmtXi(sel.xi)} km/s`],
-    ['teff',   () => sel.teff     !== null, () => `at Teff = ${sel.teffText} K`],
-    ['logg',   () => sel.logg     !== null, () => `at log g = ${sel.loggText}`],
-    ['feh',    () => sel.feh      !== null, () => `at [Fe/H] = ${sel.fehText}`],
-  ];
-  function combinations(arr, k) {
-    const out = [];
-    (function rec(start, acc) {
-      if (acc.length === k) { out.push(acc.slice()); return; }
-      for (let i = start; i < arr.length; i++) { acc.push(arr[i]); rec(i + 1, acc); acc.pop(); }
-    })(0, []);
-    return out;
-  }
-  // Phrases that name a combination read on from one another; a second "with"
-  // becomes "together with" so two dropdown names do not collide.
-  const joinCombination = (phrases) => phrases
-    .map((p, i) => (i > 0 && p.startsWith('with ') ? 'together ' + p : p))
-    .join(' ');
-  // In an "or" list a second dropdown phrase drops its "with": "with model
-  // PHOENIX or filter TESS". Value phrases keep their "at": "or at Teff = ...".
-  const joinOr = (phrases) => phrases
-    .map((p, i) => (i > 0 && p.startsWith('with ') && phrases[i - 1].startsWith('with ')
-                    ? p.slice(5) : p))
-    .join(' or ');
-  function explain(field, matches) {
-    const has = (skip) => grids.some(g => matches(g) && ok(g, skip));
-    if (has(new Set([field]))) return null;                  // it is available
-    const others = CONSTRAINTS.filter(([name, isSet]) => name !== field && isSet());
-    const relax = (names) => has(new Set([field, ...names]));
-    const opens = others.filter(([name]) => relax([name]));
-    if (opens.length === 1) return 'Unavailable ' + opens[0][2]();
-    if (opens.length >= 2)  return 'Unavailable ' + joinCombination(opens.map(o => o[2]()));
-    for (let size = 2; size <= Math.min(3, others.length); size++) {
-      for (const combo of combinations(others, size)) {
-        if (relax(combo.map(c => c[0]))) {
-          return 'Unavailable ' + joinOr(combo.map(c => c[2]()));
-        }
-      }
+  function filterReason(code) {
+    const has = (skip) => grids.some(g => g.filter === code && ok(g, skip));
+    if (has(new Set(['filter']))) return null;              // it is available
+    const relaxModel = sel.modelKey !== null &&
+                       has(new Set(['filter', 'model']));
+    const relaxXi    = sel.xi !== null &&
+                       has(new Set(['filter', 'xi']));
+    if (relaxModel && !relaxXi) {
+      return `Unavailable with model ${sel.model}`;
+    }
+    if (relaxXi && !relaxModel) {
+      return `Unavailable at \u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    /* Wording rule for the two-setting cases, shared by all three dropdowns:
+       when EACH setting alone blocks the option (so both must change), join
+       them with "or": the option is unavailable under either condition.
+       When only the COMBINATION blocks it (so changing either one would open
+       it), name the combination with no conjunction. */
+    if (relaxModel && relaxXi) {
+      // only the combination blocks it; either change alone would open it
+      return `Unavailable with model ${sel.model} at ` +
+             `\u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    if (has(new Set(['filter', 'model', 'xi']))) {
+      // each setting alone blocks it; both must change
+      return `Unavailable with model ${sel.model} or at ` +
+             `\u03be = ${fmtXi(sel.xi)} km/s`;
     }
     return 'Unavailable';
   }
-  const filterReason = (code) => explain('filter', g => g.filter === code);
-  // Models are matched on the DISPLAY name, not the underlying key. PHOENIX and
-  // PHOENIX-COND share one key, so keying on it would report a grid as
-  // reachable under a label the current filter does not actually offer.
-  const modelReason  = (name) => explain('model',  g => g.model === name);
-  const xiReason     = (value) => explain('xi',    g => g.xi === value);
 
   const fRaw = optionsFor('filter', 'filter');
   const filterOpts = fRaw.all
@@ -667,6 +629,35 @@ function scoEvaluate(state, capabilities) {
   // No sort: the capability list already arrives in the registry's own order,
   // which is the physical ordering the page has always shown (U, B, V, R, I,
   // J, H, K rather than alphabetical). Sorting would scramble it.
+  /* Why is a given model currently unavailable? Mirror of filterReason: relax
+     one constraint at a time and see which single change would make the model
+     reachable, so the label can name the setting to alter. */
+  function modelReason(name) {
+    // Match on the DISPLAY name, not the underlying key. PHOENIX and
+    // PHOENIX-COND share one key, so keying on it would report a grid as
+    // reachable under a label the current filter does not actually offer.
+    const has = (skip) => grids.some(g => g.model === name && ok(g, skip));
+    if (has(new Set(['model']))) return null;               // it is available
+    const relaxFilter = sel.filter !== null && has(new Set(['model', 'filter']));
+    const relaxXi     = sel.xi !== null && has(new Set(['model', 'xi']));
+    if (relaxFilter && !relaxXi) {
+      return `Unavailable with filter ${sel.filter}`;
+    }
+    if (relaxXi && !relaxFilter) {
+      return `Unavailable at \u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    if (relaxFilter && relaxXi) {
+      // only the combination blocks it; either change alone would open it
+      return `Unavailable with filter ${sel.filter} at ` +
+             `\u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    if (has(new Set(['model', 'filter', 'xi']))) {
+      // each setting alone blocks it; both must change (see rule above)
+      return `Unavailable with filter ${sel.filter} or at ` +
+             `\u03be = ${fmtXi(sel.xi)} km/s`;
+    }
+    return 'Unavailable';
+  }
 
   const mRaw = optionsFor('model', 'model');
   const modelOpts = mRaw.all.map(m => ({
@@ -674,6 +665,32 @@ function scoEvaluate(state, capabilities) {
     available: mRaw.available.includes(m),
     reason: mRaw.available.includes(m) ? null : modelReason(m),
   }));
+  /* Why is a given velocity unavailable? Same relax-one-constraint technique,
+     naming the model or the filter responsible. In practice this is almost
+     always the model: ATLAS carries all five velocities and every
+     PHOENIX-family model carries only 2. */
+  function xiReason(value) {
+    const has = (skip) => grids.some(g => g.xi === value && ok(g, skip));
+    if (has(new Set(['xi']))) return null;                  // it is available
+    const relaxModel  = sel.model !== null && has(new Set(['xi', 'model']));
+    const relaxFilter = sel.filter !== null && has(new Set(['xi', 'filter']));
+    if (relaxModel && !relaxFilter) {
+      return `Unavailable with model ${sel.model}`;
+    }
+    if (relaxFilter && !relaxModel) {
+      return `Unavailable with filter ${sel.filter}`;
+    }
+    if (relaxModel && relaxFilter) {
+      // only the combination blocks it; either change alone would open it
+      return `Unavailable with model ${sel.model} together with ` +
+             `filter ${sel.filter}`;
+    }
+    if (has(new Set(['xi', 'model', 'filter']))) {
+      // each setting alone blocks it; both must change (see rule above)
+      return `Unavailable with model ${sel.model} or filter ${sel.filter}`;
+    }
+    return 'Unavailable';
+  }
 
   const xRaw = optionsFor('xi', 'xi');
   const xiOpts = xRaw.all.sort((a, b) => a - b)
@@ -721,26 +738,20 @@ function scoEvaluate(state, capabilities) {
     };
   }
 
-  // A typed value is out of range when it lies outside the envelope of the
-  // grids that satisfy every other setting. Endpoints only: a value inside the
-  // envelope may still hit a hole in a ragged grid, and that is for the
-  // service to say (C5).
-  const outside = (v, r) => v !== null && r !== null && (v < r.min || v > r.max);
-
   const fields = {
     filter: discreteField(filterOpts, sel.filter, 'code'),
     model:  discreteField(modelOpts, sel.model, null, true),
     xi:     discreteField(xiOpts, sel.xi, null, true),
-    teff:   { range: teffRange, locked: false, outOfRange: outside(sel.teff, teffRange),
+    teff:   { range: teffRange, locked: false,
               blurb: teffRange ? `${teffRange.min} – ${teffRange.max} K` : '—' },
-    logg:   { range: loggRange, locked: false, outOfRange: outside(sel.logg, loggRange),
+    logg:   { range: loggRange, locked: false,
               blurb: loggRange ? `${loggRange.min} – ${loggRange.max}` : '—' },
     feh:    (() => {
       // metallicity locks to solar when the surviving grids are all solar-only
       if (fehRange && fehRange.fixed) {
-        return { range: fehRange, locked: true, value: 0.0, outOfRange: false, blurb: 'solar (0.0)' };
+        return { range: fehRange, locked: true, value: 0.0, blurb: 'solar (0.0)' };
       }
-      return { range: fehRange, locked: false, outOfRange: outside(sel.feh, fehRange),
+      return { range: fehRange, locked: false,
                blurb: fehRange ? `${fehRange.min} – ${fehRange.max}` : '—' };
     })(),
   };
@@ -791,7 +802,132 @@ const SCO_DEFAULT_XI = 2;
 /* The id of the field the user last changed. It is authoritative during
    settling: everything else adjusts around it. */
 let SCO_ANCHOR = null;
-let SCO_LAST = null;       // result of the most recent evaluation; the submit gate reads it
+
+/* Informational note. When the page changes a dropdown on the user's behalf,
+   because a typed or looked-up value falls outside the chosen grid, it says so
+   in the message area: "Teff at 2000 K requires model PHOENIX." The note stays
+   until the form state it describes changes, and it is re-shown after a
+   compute, which clears the message area. A service refusal always takes
+   precedence and is never overwritten. */
+let SCO_NOTE = null;
+let SCO_NOTE_KEYS = [];      // the fields the note depends on ...
+let SCO_NOTE_STATE = null;   // ... and their values when it was written
+
+function scoSnapshot() {
+  return {
+    filter: $('filter').value, model: $('model').value, xi: $('xi').value,
+    teff: $('teff').value.trim(), logg: $('logg').value.trim(), feh: $('feh').value.trim(),
+    fehLocked: $('feh').disabled,
+  };
+}
+function scoNoteKey(s, keys) {
+  return keys.map(k => s[k]).join('|');
+}
+function scoShowNote() {
+  if (!SCO_NOTE) return;
+  const showingOther = statusEl.textContent.trim() !== '' && !statusEl.classList.contains('sco-note');
+  if (showingOther) return;                       // a service message is up; leave it
+  statusEl.textContent = SCO_NOTE;
+  statusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+  statusEl.classList.add('sco-note');
+}
+function scoClearNote() {
+  SCO_NOTE = null;
+  SCO_NOTE_KEYS = [];
+  SCO_NOTE_STATE = null;
+  if (statusEl.classList.contains('sco-note')) {
+    statusEl.textContent = '';
+    statusEl.classList.remove('sco-note');
+  }
+}
+
+/* After a refresh, compare the form with how it stood before and describe any
+   change the page made by itself. */
+function scoNoteAfterRefresh(origin, final) {
+  const caps = SCO_CAPS_CURRENT;
+  if (!caps || !caps.length) return;
+  const modelMoved  = origin.model !== '' && origin.model !== final.model && SCO_ANCHOR !== 'model';
+  const xiMoved     = origin.xi !== '' && origin.xi !== final.xi && SCO_ANCHOR !== 'xi';
+  const fehSetAside = final.fehLocked && !origin.fehLocked &&
+                      origin.feh !== '' && !isNaN(Number(origin.feh)) && Number(origin.feh) !== 0;
+
+  if (!modelMoved && !xiMoved && !fehSetAside) {
+    // Nothing automatic happened. The note stays while the fields it depends
+    // on are unchanged; it goes when the user alters one of them.
+    if (SCO_NOTE && scoNoteKey(final, SCO_NOTE_KEYS) !== SCO_NOTE_STATE) scoClearNote();
+    else scoShowNote();
+    return;
+  }
+
+  // Which typed values are responsible? Probe the evaluator with the original
+  // dropdown choices and one typed value at a time; a value that alone makes
+  // the original choice unavailable is a cause. If none does alone, try pairs.
+  const TYPED = [['teff', 'Teff', ' K'], ['logg', 'log g', ''], ['feh', '[Fe/H]', '']];
+  const fieldName = modelMoved ? 'model' : 'xi';
+  const originValue = modelMoved ? origin.model : origin.xi;
+  const base = { filter: origin.filter || '', model: origin.model, xi: origin.xi, teff: '', logg: '', feh: '' };
+  const availableIn = (state) => {
+    const r = scoEvaluate(state, caps);
+    const o = r.fields[fieldName].options.find(x => String(x.value) === String(originValue));
+    return !!(o && o.available);
+  };
+  const phrase = (t) => `${t[1]} at ${final[t[0]]}${t[2]}`;
+  let causes = [];
+  const keys = new Set(['model', 'xi']);          // what the note depends on
+  if (modelMoved || xiMoved) {
+    if (!availableIn(base)) {
+      // The original choice was already closed under the dropdowns alone: a
+      // dropdown change, not a typed value, is the cause.
+      keys.add('filter');
+      if (SCO_ANCHOR === 'filter' && final.filter) causes = [`Filter ${final.filter}`];
+      else if (SCO_ANCHOR === 'xi') causes = [`ξ = ${final.xi} km/s`];
+      else causes = ['The current selection'];
+    } else {
+      const present = TYPED.filter(t => final[t[0]] !== '' && !isNaN(Number(final[t[0]])));
+      const single = present.filter(t => !availableIn(Object.assign({}, base, { [t[0]]: final[t[0]] })));
+      single.forEach(t => keys.add(t[0]));
+      causes = single.map(phrase);
+      if (!causes.length) {
+        for (let i = 0; i < present.length && !causes.length; i++) {
+          for (let j = i + 1; j < present.length && !causes.length; j++) {
+            const st = Object.assign({}, base, { [present[i][0]]: final[present[i][0]], [present[j][0]]: final[present[j][0]] });
+            if (!availableIn(st)) {
+              causes = [phrase(present[i]), phrase(present[j])];
+              keys.add(present[i][0]); keys.add(present[j][0]);
+            }
+          }
+        }
+      }
+      if (!causes.length) { causes = ['The entered parameters']; ['teff', 'logg', 'feh'].forEach(k => keys.add(k)); }
+    }
+  }
+
+  let text = '';
+  if (modelMoved || xiMoved) {
+    const subject = causes.join(' and ');
+    const plural = causes.length > 1 || causes[0] === 'The entered parameters';
+    if (modelMoved && final.model === '') {
+      keys.add('filter');
+      text = `${subject} ${plural ? 'leave' : 'leaves'} no model available` +
+             (final.filter ? ` for filter ${final.filter}` : '') + '.';
+    } else if (modelMoved) {
+      text = `${subject} ${plural ? 'require' : 'requires'} model ${final.model}` +
+             (xiMoved && final.xi !== '' ? ` at ξ = ${final.xi} km/s` : '') + '.';
+    } else {
+      text = `${subject} ${plural ? 'require' : 'requires'} ξ = ${final.xi} km/s.`;
+    }
+  }
+  if (fehSetAside) {
+    const table = (final.model ? `the ${final.model} table` : 'the selected table') +
+                  (final.xi !== '' && Number(final.xi) !== 2 ? ` at \u03be = ${final.xi} km/s` : '');
+    text += (text ? ' ' : '') + `[Fe/H] ${origin.feh} replaced by 0.0: ${table} is solar-only.`;
+    keys.add('feh');
+  }
+  SCO_NOTE = text;
+  SCO_NOTE_KEYS = [...keys];
+  SCO_NOTE_STATE = scoNoteKey(final, SCO_NOTE_KEYS);
+  scoShowNote();
+}
 
 /* Capability data per law, fetched once and cached for the session. */
 const SCO_CAPS = {};   // law -> capabilities array
@@ -813,10 +949,6 @@ function scoReadState() {
     teff:   $('teff').value.trim() === '' ? null : Number($('teff').value),
     logg:   $('logg').value.trim() === '' ? null : Number($('logg').value),
     feh:    $('feh').value.trim() === '' ? null : Number($('feh').value),
-    // the text as typed, so a tag can echo it ("at Teff = 3000 K")
-    teffText: $('teff').value.trim(),
-    loggText: $('logg').value.trim(),
-    fehText:  $('feh').value.trim(),
   };
 }
 
@@ -849,16 +981,15 @@ function scoFillSelect(sel, options, labelOf, keep) {
     if (o.disabled) opt.disabled = true;
     sel.appendChild(opt);
   }
-  // A choice the user has made is never moved or blanked by the page. If it
-  // has become unavailable, because a typed value or a lookup put the star
-  // outside its grid, it stays selected in its tagged, disabled state, the
-  // Compute button closes, and the tag and blurb say what to change. Moving
-  // it silently would hand the user coefficients from a model they did not
-  // choose, and would lose the choice even after the value is corrected.
-  // Only a value that no longer exists in the list at all (a law switch, or
-  // an empty field) falls back to the first selectable option.
+  // The field the user just touched is authoritative and keeps its value even
+  // while it is momentarily unavailable, because it is the choice that is about
+  // to make the other fields correct themselves. Every other field holding a
+  // now-unavailable value is moved onto a selectable one.
+  const isAnchor = (sel.id === SCO_ANCHOR);
   const selectable = options.filter(o => !o.disabled);
-  if (options.some(o => o.value === prev)) {
+  if (isAnchor && options.some(o => o.value === prev)) {
+    sel.value = prev;
+  } else if (selectable.some(o => o.value === prev)) {
     sel.value = prev;
   } else if (selectable.length) {
     sel.value = selectable[0].value;
@@ -877,14 +1008,16 @@ function scoFillSelect(sel, options, labelOf, keep) {
 let SCO_CAPS_CURRENT = [];
 
 function scoRefresh() {
+  const origin = scoSnapshot();
   let before = '';
   for (let pass = 0; pass < 6; pass++) {
     scoRefreshOnce();
     const after = [$('filter').value, $('model').value, $('xi').value,
                    $('feh').value, $('feh').disabled].join('|');
-    if (after === before) return;
+    if (after === before) break;
     before = after;
   }
+  scoNoteAfterRefresh(origin, scoSnapshot());
 }
 
 function scoRefreshOnce() {
@@ -894,7 +1027,6 @@ function scoRefreshOnce() {
   const state = scoReadState();
   const r = scoEvaluate(state, caps);
   const f = r.fields;
-  SCO_LAST = r;
 
   /* --- filter dropdown: narrow to available codes, keep a blank placeholder */
   const filterSel = $('filter');
@@ -995,36 +1127,10 @@ function scoRefreshOnce() {
     $('feh').disabled = false;
   }
 
-  /* --- out-of-range marking. A typed value outside the envelope of the
-     chosen grid is marked on the field and its blurb; the blurb already shows
-     the range, so no message is needed anywhere. */
-  for (const id of ['teff', 'logg', 'feh']) {
-    $(id).classList.toggle('sco-invalid', !!f[id].outOfRange);
-    $(id + 'Hint').classList.toggle('sco-invalid-hint', !!f[id].outOfRange);
-  }
-
-  /* --- the discrete blurbs sit beside their fields. When a kept choice has
-     become unavailable, the blurb repeats its tag, because the closed dropdown
-     may clip the tagged option text. */
-  const blurbFor = (fd, key, normal) => {
-    const cur = fd.options.find(o => String(key ? o[key] : o.value) === String(fd.value));
-    return (fd.invalid && cur && cur.reason) ? cur.reason : normal;
-  };
-  $('filterHint').textContent = blurbFor(f.filter, 'code', f.filter.blurb);
-  $('modelHint').textContent  = blurbFor(f.model, null, f.model.blurb);
-  $('xiHint').textContent     = blurbFor(f.xi, null, f.xi.blurb);
-  filterSel.classList.toggle('sco-invalid', !!f.filter.invalid);
-  modelSel.classList.toggle('sco-invalid', !!f.model.invalid);
-  xiSel.classList.toggle('sco-invalid', !!f.xi.invalid);
-  $('filterHint').classList.toggle('sco-invalid-hint', !!f.filter.invalid);
-  $('modelHint').classList.toggle('sco-invalid-hint', !!f.model.invalid);
-  $('xiHint').classList.toggle('sco-invalid-hint', !!f.xi.invalid);
-
-  /* --- the submit gate. Compute is enabled only when every field is filled
-     and the combination matches at least one grid. This is what makes an
-     out-of-range submission unreachable, in the same way conflicting dropdown
-     pairs already are. The status area is never written to here. */
-  $('submitBtn').disabled = !r.canSubmit;
+  /* --- the discrete blurbs sit beside their fields */
+  $('filterHint').textContent = f.filter.blurb;
+  $('modelHint').textContent  = f.model.blurb;
+  $('xiHint').textContent     = f.xi.blurb;
 
   scoSyncLegacy();
 }
@@ -1034,8 +1140,11 @@ function scoWireValidation() {
   ['filter', 'model', 'xi', 'teff', 'logg', 'feh'].forEach(id => {
     const el = $(id);
     if (el && !el.dataset.scoWired) {
+      // Evaluate when a value is committed (change), not on every keystroke.
+      // Typing "6000" passes through 6, 60 and 600, and evaluating each of
+      // those would move the model away from the user's choice before the
+      // real value is even entered.
       el.addEventListener('change', () => { SCO_ANCHOR = id; scoRefresh(); SCO_ANCHOR = null; tryAutoCompute(); });
-      el.addEventListener('input',  () => { SCO_ANCHOR = id; scoRefresh(); SCO_ANCHOR = null; });
       el.dataset.scoWired = '1';   // guard against the historic listener leak
     }
   });
@@ -1396,10 +1505,6 @@ function hasGridIncompatibility() {
 
 
 function tryAutoCompute() {
-  // Evaluate afresh first: values may have been written by the lookup rather
-  // than typed, and the gate must reflect what is in the fields right now.
-  scoRefresh();
-  if (!SCO_LAST || !SCO_LAST.canSubmit) return;
   if (!$('filter').value) return;
   if (!$('teff').value.trim()) return;
   if (!$('logg').value.trim()) return;
@@ -1414,17 +1519,16 @@ function tryAutoCompute() {
 form.addEventListener('submit', async (ev) => {
   ev.preventDefault();
 
-  // The gate, applied here as well as on the button, so that neither the Enter
-  // key nor a programmatic submit can send a combination the evaluator has
-  // ruled out. Nothing is written to the status area: the fields already show
-  // what is wrong.
-  scoRefresh();
-  if (!SCO_LAST || !SCO_LAST.canSubmit) return;
-
+  
   if (!currentFilter || !currentModelEntry) {
     // Distinguish the two causes: no filter chosen at all, versus a filter
     // chosen but no usable stellar model resolved for it.
     const noFilter = !currentFilter;
+    if (!noFilter && SCO_NOTE) {
+      // The page itself emptied the model; the note already says why.
+      scoShowNote();
+      return;
+    }
     statusEl.textContent = noFilter
       ? 'Please select a filter.'
       : 'Please select a stellar model for this filter.';
@@ -1508,6 +1612,7 @@ form.addEventListener('submit', async (ev) => {
     $('computeResultMessage').textContent = 'Calculated';
     statusEl.textContent = '';
     statusEl.classList.remove('text-danger', 'text-muted', 'text-success');
+    scoShowNote();   // the informational note survives the compute
   } catch (e) {
     statusEl.textContent = e.message;
 	
@@ -1881,8 +1986,8 @@ async function doLookup() {
     }
   }
   // The values above were written, not typed, so no change event fired. Run
-  // the evaluator now so the dropdown tags and the Compute gate reflect the
-  // looked-up star before any of the older checks below decide what to say.
+  // the evaluator now: if the looked-up star lies outside the chosen grid the
+  // model changes here, and the message area says so.
   scoRefresh();
 
   
