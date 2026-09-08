@@ -869,6 +869,7 @@ function scoNoteAfterRefresh(origin, final) {
   };
   const phrase = (t) => `${t[1]} at ${final[t[0]]}${t[2]}`;
   let causes = [];
+  const causeFields = [];                          // typed field ids behind the causes
   const keys = new Set(['model', 'xi']);          // what the note depends on
   if (modelMoved || xiMoved) {
     if (!availableIn(base)) {
@@ -881,7 +882,7 @@ function scoNoteAfterRefresh(origin, final) {
     } else {
       const present = TYPED.filter(t => final[t[0]] !== '' && !isNaN(Number(final[t[0]])));
       const single = present.filter(t => !availableIn(Object.assign({}, base, { [t[0]]: final[t[0]] })));
-      single.forEach(t => keys.add(t[0]));
+      single.forEach(t => { keys.add(t[0]); causeFields.push(t[0]); });
       causes = single.map(phrase);
       if (!causes.length) {
         for (let i = 0; i < present.length && !causes.length; i++) {
@@ -890,11 +891,15 @@ function scoNoteAfterRefresh(origin, final) {
             if (!availableIn(st)) {
               causes = [phrase(present[i]), phrase(present[j])];
               keys.add(present[i][0]); keys.add(present[j][0]);
+              causeFields.push(present[i][0], present[j][0]);
             }
           }
         }
       }
-      if (!causes.length) { causes = ['The entered parameters']; ['teff', 'logg', 'feh'].forEach(k => keys.add(k)); }
+      if (!causes.length) {
+        causes = ['The entered parameters'];
+        present.forEach(t => { keys.add(t[0]); causeFields.push(t[0]); });
+      }
     }
   }
 
@@ -903,9 +908,18 @@ function scoNoteAfterRefresh(origin, final) {
     const subject = causes.join(' and ');
     const plural = causes.length > 1 || causes[0] === 'The entered parameters';
     if (modelMoved && final.model === '') {
+      // "No model available for filter = V, Teff = 2566, and Log(g) = 5.2396"
       keys.add('filter');
-      text = `${subject} ${plural ? 'leave' : 'leaves'} no model available` +
-             (final.filter ? ` for filter ${final.filter}` : '') + '.';
+      const NAMES = { teff: 'Teff', logg: 'Log(g)', feh: '[Fe/H]' };
+      const items = [];
+      if (final.filter) items.push(`filter = ${final.filter}`);
+      ['teff', 'logg', 'feh'].forEach(k => {
+        if (causeFields.includes(k) && final[k] !== '') items.push(`${NAMES[k]} = ${final[k]}`);
+      });
+      const list = items.length <= 1 ? items.join('')
+                 : items.length === 2 ? items.join(' and ')
+                 : items.slice(0, -1).join(', ') + ', and ' + items[items.length - 1];
+      text = `No model available${list ? ' for ' + list : ''}.`;
     } else if (modelMoved) {
       text = `${subject} ${plural ? 'require' : 'requires'} model ${final.model}` +
              (xiMoved && final.xi !== '' ? ` at ξ = ${final.xi} km/s` : '') + '.';
