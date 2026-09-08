@@ -735,8 +735,6 @@ function scoEvaluate(state, capabilities) {
       available: avail,       // just the selectable values
       locked,
       value: locked ? avail[0] : current,
-      invalid: current !== null && current !== undefined && current !== '' &&
-               !avail.includes(current),
     };
   }
 
@@ -774,14 +772,10 @@ function scoEvaluate(state, capabilities) {
     ? fields.xi.available.map(v => (v % 1 === 0 ? v.toFixed(0) : v)).join(', ')
     : '—';
 
-  // Can we submit? Every discrete field must resolve to exactly one grid, and
-  // the continuous fields must be present and within range. C5 is not checked.
-  const chosen = grids.filter(g => ok(g, new Set()));
-  const haveDiscrete = sel.filter && sel.model && sel.xi !== null;
-  const haveContinuous = sel.teff !== null && sel.logg !== null && sel.feh !== null;
-  const canSubmit = haveDiscrete && haveContinuous && chosen.length > 0;
-
-  return { fields, canSubmit, matchingGrids: chosen.length };
+  // No submit gate is computed here. The page never blocks a compute: a value
+  // outside the chosen grid moves the model (and says so in the message area),
+  // and whether an exact point has data is for the service to decide (C5).
+  return { fields };
 }
 
 
