@@ -844,7 +844,7 @@ function scoNoteAfterRefresh(origin, final) {
   if (!caps || !caps.length) return;
   const modelMoved  = origin.model !== '' && origin.model !== final.model && SCO_ANCHOR !== 'model';
   const xiMoved     = origin.xi !== '' && origin.xi !== final.xi && SCO_ANCHOR !== 'xi';
-  const fehSetAside = final.fehLocked && !origin.fehLocked &&
+  const fehSetAside = final.fehLocked &&
                       origin.feh !== '' && !isNaN(Number(origin.feh)) && Number(origin.feh) !== 0;
 
   if (!modelMoved && !xiMoved && !fehSetAside) {
@@ -1304,19 +1304,7 @@ function selectSupportedModel(filterEntry) {
 
 
 
-function activeBounds() {
-  // Bounds for the currently selected filter + model, or null if unavailable.
-  return currentModelEntry || null;
-}
 
-function filterHasModel(displayName) {
-  // True if the currently selected filter offers the given model.
-  if (!currentFilter) return false;
-  if (displayName === 'ATLAS') {
-    return currentFilter.models.some(m => m.model === 'ATLAS');
-  }
-  return currentFilter.models.some(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND');
-}
 
 function otherModelName() {
   // The display name of the model NOT currently selected ('ATLAS' <-> 'PHOENIX').
@@ -1416,87 +1404,26 @@ function paramsMatchBaseline() {
 
 
 
-function hasSolarMismatch() {
-  if (!$('feh').disabled) return false;
-  if (lookupBaseline === null) return false;
-  if (typeof lookupBaseline.feh !== 'number') return false;
-  if (Math.abs(lookupBaseline.feh) < 0.05) return false;
-  const teff = lookupBaseline.teff;
-  if (typeof teff !== 'number') return false;
-  
-  const atlasEntry = currentFilter
-    ? currentFilter.models.find(m => m.model === 'ATLAS')
-    : null;
-  if (!atlasEntry) return false;
-  if (teff < atlasEntry.teff_min) return false;
-  return true;
-}
-
-
-function isLookupBaselineLoggUnsupported() {
-  if (lookupBaseline === null) return false;
-  const b = activeBounds();
-  if (!b) return false;
-  return typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > b.logg_max;
-}
-
-
-function renderUnsupportedLoggMessage() {
-  lookupStatusEl.querySelectorAll('.text-danger').forEach(el => el.remove());
-  const b = activeBounds();
-  const limit = b ? b.logg_max.toFixed(1) : '5.0';
-  addLookupLine(
-    `This target is not supported because its value of Log(g) is above the limits of the supported tables (${limit}).`,
-    'text-danger',
-  );
-}
-
-
-function renderLookupModelContext() {
-  
+/* The lookup's only commentary is its source line. Availability of the
+   looked-up star against the chosen filter, model and velocity is decided by
+   the evaluator, which runs as soon as the values are written, and any change
+   it makes is announced in the message area. The v4-era checks that used to
+   live here (Teff and log g against the selected grid, the solar-metallicity
+   rules, the PHOENIX-only notes) were a second, older judge of the same
+   question and have been removed. */
+function renderLookupSource() {
   lookupStatusEl.querySelectorAll('.lookup-model-context').forEach(el => el.remove());
-
   if (lookupBaseline === null) return;
-  const _b = activeBounds();
-  if (_b && typeof lookupBaseline.logg === 'number' && lookupBaseline.logg > _b.logg_max) return;
-
-  if (!hasGridIncompatibility()) {
-    const sourceLabel = lookupBaseline.source === 'NEA'
-      ? 'NASA Exoplanet Archive Composite Parameters'
-      : (lookupBaseline.source === 'ExoFOP'
-          ? 'ExoFOP-TESS'
-          : lookupBaseline.source || 'unknown');
-    const citationDetail = lookupBaseline.citation ? `, ${lookupBaseline.citation}` : '';
-    const div = document.createElement('div');
-    div.className = 'lookup-line text-muted lookup-model-context';
-    div.textContent = `Source: ${sourceLabel}${citationDetail}`;
-    lookupStatusEl.appendChild(div);
-  }
-
-  if ($('model').value === 'PHOENIX'
-      && typeof lookupBaseline.feh === 'number'
-      && Math.abs(lookupBaseline.feh) >= 0.05) {
-    const atlasFeasible = typeof lookupBaseline.teff === 'number' && lookupBaseline.teff >= 3500;
-    if (!atlasFeasible) {
-      const div = document.createElement('div');
-      div.className = 'lookup-line text-muted lookup-model-context';
-      div.textContent = `The PHOENIX subset supports only solar metallicity at this Teff. [Fe/H] = ${lookupBaseline.feh.toFixed(3)} has been treated as 0.0 for LDC computation.`;
-      lookupStatusEl.appendChild(div);
-    }
-  }
-}
-
-
-function hasGridIncompatibility() {
-  if (hasSolarMismatch()) return true;
-  if (lookupBaseline === null) return false;
-  const b = activeBounds();
-  if (!b) return false;
-  const teff = lookupBaseline.teff;
-  const logg = lookupBaseline.logg;
-  if (typeof logg === 'number' && (logg > b.logg_max || logg < b.logg_min)) return true;
-  if (typeof teff === 'number' && (teff > b.teff_max || teff < b.teff_min)) return true;
-  return false;
+  const sourceLabel = lookupBaseline.source === 'NEA'
+    ? 'NASA Exoplanet Archive Composite Parameters'
+    : (lookupBaseline.source === 'ExoFOP'
+        ? 'ExoFOP-TESS'
+        : lookupBaseline.source || 'unknown');
+  const citationDetail = lookupBaseline.citation ? `, ${lookupBaseline.citation}` : '';
+  const div = document.createElement('div');
+  div.className = 'lookup-line text-muted lookup-model-context';
+  div.textContent = `Source: ${sourceLabel}${citationDetail}`;
+  lookupStatusEl.appendChild(div);
 }
 
 
@@ -1505,10 +1432,6 @@ function tryAutoCompute() {
   if (!$('teff').value.trim()) return;
   if (!$('logg').value.trim()) return;
   if (!$('feh').value.trim()) return;
-  if (hasGridIncompatibility()) {
-    renderLookupModelContext();
-    return;
-  }
   form.requestSubmit();
 }
 
@@ -1531,17 +1454,6 @@ form.addEventListener('submit', async (ev) => {
     statusEl.classList.remove('text-success', 'text-muted');
     statusEl.classList.add('text-danger');
     $(noFilter ? 'filter' : 'model').focus();
-    clearResult();
-    return;
-  }
-
-  
-  if (hasSolarMismatch()) {
-    statusEl.textContent = 'Cannot compute: the selected grid is solar-metallicity only, '
-      + 'but the planet\u2019s [Fe/H] is non-zero. Switch to the ATLAS model and rerun '
-      + 'planet Lookup.';
-    statusEl.classList.remove('text-success', 'text-muted');
-    statusEl.classList.add('text-danger');
     clearResult();
     return;
   }
@@ -1572,17 +1484,6 @@ form.addEventListener('submit', async (ev) => {
     lookupBaseline = null;
   }
 
-  
-  if (isLookupBaselineLoggUnsupported()) {
-    renderUnsupportedLoggMessage();
-    statusEl.textContent = '';
-    statusEl.classList.remove('text-danger', 'text-success');
-    statusEl.classList.add('text-muted');
-    $('computeResultMessage').textContent = '';
-    clearResult();
-    return;
-  }
-
   const params = new URLSearchParams({
     teff:   $('teff').value,
     logg:   $('logg').value,
@@ -1598,7 +1499,7 @@ form.addEventListener('submit', async (ev) => {
   
   lookupStatusEl.querySelectorAll('.text-danger').forEach(el => el.remove());
   $('computeResultMessage').textContent = '';
-  renderLookupModelContext();
+  renderLookupSource();
 
   try {
     const resp = await fetch(apiBase() + '/compute?' + params.toString());
@@ -1785,9 +1686,9 @@ function blankForm() {
 // These inputs are law-independent. Every target in the NEA and ExoFOP
 // catalogues that is valid in one law is valid in all three, so there is no
 // reason to make the user re-enter or re-resolve them after switching laws.
-// Retaining lookupBaseline also keeps hasGridIncompatibility() working, so the
-// front end can still warn before submitting if a retained value falls outside
-// the newly selected filter's grid.
+// Retaining lookupBaseline keeps the source line and the "parameters changed
+// since lookup" check working; whether a retained value fits the newly
+// selected law is the evaluator's business, and it runs on the law switch.
 //
 // CLEARED BY applyLaw() (not repeated here): the filter list and the model
 // options. Those are genuinely law-specific -- power-2 has no CoRoT or
@@ -1804,8 +1705,11 @@ function blankForm() {
 // from and knows a filter is still needed.
 function resetForLawChange() {
   statusEl.textContent = '';
-  statusEl.classList.remove('text-danger', 'text-success');
+  statusEl.classList.remove('text-danger', 'text-success', 'sco-note');
   statusEl.classList.add('text-muted');
+  // applyLaw() has just re-evaluated the retained values against the new law;
+  // if that moved the model, the note explaining it must survive this clear.
+  scoShowNote();
   $('computeResultMessage').textContent = '';
 
   clearLookupStatus();
@@ -1972,14 +1876,11 @@ async function doLookup() {
 
   populateParameterValue('feh', data.feh);
   let fehSubstituted = false;
-  if (!$('feh').disabled) {
-    if (typeof data.feh === 'number') {
-      foundLabels.push('[Fe/H]');
-    } else {
-      
-      $('feh').value = '0.0';
-      fehSubstituted = true;
-    }
+  if (typeof data.feh === 'number') {
+    foundLabels.push('[Fe/H]');
+  } else {
+    $('feh').value = '0.0';
+    fehSubstituted = true;
   }
   // The values above were written, not typed, so no change event fired. Run
   // the evaluator now: if the looked-up star lies outside the chosen grid the
@@ -2010,71 +1911,18 @@ async function doLookup() {
   }
 
   
-  renderLookupModelContext();
+  renderLookupSource();
 
-  
-  if (isLookupBaselineLoggUnsupported()) {
-    renderUnsupportedLoggMessage();
-    return;
-  }
-
-  const _lb = activeBounds();
-
-  
-  if (_lb && typeof data.teff === 'number' && data.teff < _lb.teff_min) {
-    const alt = filterHasModel('PHOENIX') && $('model').value === 'ATLAS'
-      ? ' Switch to PHOENIX model.' : '';
-    addLookupLine(
-      `The ${$('model').value === 'ATLAS' ? 'ATLAS' : currentModelEntry.model} model does not support Teff below ${_lb.teff_min.toFixed(0)} K.${alt}`,
-      'text-danger',
-    );
-  }
-
-  
-  if (_lb) {
-    if (typeof data.teff === 'number' && data.teff > _lb.teff_max) {
-      const alt = filterHasModel('ATLAS') && $('model').value === 'PHOENIX'
-        ? ' Switch to ATLAS model.' : '';
-      addLookupLine(
-        `The ${currentModelEntry.model} model does not support Teff above ${_lb.teff_max.toFixed(0)} K.${alt}`,
-        'text-danger',
-      );
-    }
-    if (typeof data.logg === 'number' && data.logg < _lb.logg_min) {
-      const alt = filterHasModel('ATLAS') && $('model').value === 'PHOENIX'
-        ? ' Switch to ATLAS model.' : '';
-      addLookupLine(
-        `The ${currentModelEntry.model} model does not support Log(g) below ${_lb.logg_min.toFixed(1)}.${alt}`,
-        'text-danger',
-      );
-    }
-    if ($('model').value === 'PHOENIX'
-        && typeof data.feh === 'number' && Math.abs(data.feh) >= 0.05) {
-     
-      const atlasEntry = currentFilter.models.find(m => m.model === 'ATLAS');
-      const atlasFeasible = atlasEntry && typeof data.teff === 'number'
-        && data.teff >= atlasEntry.teff_min;
-      if (atlasFeasible) {
-        addLookupLine(
-          'The PHOENIX model does not support non-zero [Fe/H]. Switch to ATLAS model and rerun planet Lookup.',
-          'text-danger',
-        );
-      }
-    }
-  }
-
- 
   tryAutoCompute();
 }
 
 
 function populateParameterValue(fieldId, value) {
-  const el = $(fieldId);
-  if (value === null || value === undefined) {
-    if (!el.disabled) el.value = '';
-  } else {
-    if (!el.disabled) el.value = value;
-  }
+  // Always write what the catalogue returned, locked field or not. The
+  // evaluator runs immediately afterwards and re-applies any lock, and the
+  // message area then says which value was replaced. Skipping a locked field
+  // used to make a catalogue metallicity vanish without a word.
+  $(fieldId).value = (value === null || value === undefined) ? '' : value;
 }
 
 
