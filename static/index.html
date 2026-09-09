@@ -551,9 +551,16 @@ function scoEvaluate(state, capabilities) {
     logg:   num(state.logg),
     feh:    num(state.feh),
   };
+  // The text as typed, for tags that name a typed value as the cause. Falls
+  // back to the number when a caller passes numbers only.
+  const asTyped = (text, n) => (text !== undefined && text !== null && String(text).trim() !== '')
+    ? String(text).trim() : (n === null ? '' : String(n));
+  sel.teffText = asTyped(state.teffText, sel.teff);
+  sel.loggText = asTyped(state.loggText, sel.logg);
+  sel.fehText  = asTyped(state.fehText,  sel.feh);
 
   // Does a grid satisfy every selected constraint EXCEPT the ones named in skip?
-  function ok(g, skip) {
+  function ok(g, skip, strictFeh = false) {
     if (!skip.has('filter') && sel.filter !== null && g.filter !== sel.filter) return false;
     if (!skip.has('model')  && sel.modelKey !== null && g.model_key !== sel.modelKey) return false;
     if (!skip.has('xi')     && sel.xi     !== null && g.xi !== sel.xi)         return false;
@@ -565,7 +572,7 @@ function scoEvaluate(state, capabilities) {
     // Choosing it locks the field to solar and the message area says the
     // entered value was set aside. Grids with a real metallicity axis are
     // still bounded by it.
-    if (!skip.has('feh')    && sel.feh    !== null && !g.feh_fixed &&
+    if (!skip.has('feh')    && sel.feh    !== null && (strictFeh || !g.feh_fixed) &&
         (sel.feh < g.feh_min || sel.feh > g.feh_max)) return false;
     return true;
   }
@@ -583,42 +590,82 @@ function scoEvaluate(state, capabilities) {
     return { available: [...avail], all: [...all] };
   }
 
-  /* Why is a given filter currently unavailable? Work out which choice is
-     actually responsible by relaxing one constraint at a time and seeing
-     whether that alone would make the filter reachable. The answer names the
-     specific setting to change, rather than saying only that it cannot be
-     used. */
+  /* Why is a given option unavailable? One explainer serves all three
+     dropdowns. It relaxes the OTHER selected settings, dropdowns and typed
+     values alike, and reports the smallest change that would open the option,
+     so the tag names the specific setting to alter.
+
+     Wording rule, shared by every dropdown:
+       - one setting alone would open it      -> name it
+           "Unavailable with model ATLAS", "Unavailable at Teff = 3000"
+       - several settings would EACH open it  -> only the combination blocks;
+                                                 name them with no conjunction
+           "Unavailable with model ATLAS at \u03be = 8 km/s"
+       - no single setting opens it           -> find the smallest set that
+                                                 must change together; each of
+                                                 them alone blocks, so join
+                                                 them with "or"
+           "Unavailable with model ATLAS or at \u03be = 8 km/s"
+     Settings are always named in the same order: model, filter, velocity,
+     Teff, Log(g), [Fe/H]. Typed values are echoed as typed, without units;
+     the velocity keeps its "km/s" form by request. */
   const fmtXi = (v) => (v % 1 === 0 ? v.toFixed(0) : String(v));
-  function filterReason(code) {
-    const has = (skip) => grids.some(g => g.filter === code && ok(g, skip));
-    if (has(new Set(['filter']))) return null;              // it is available
-    const relaxModel = sel.modelKey !== null &&
-                       has(new Set(['filter', 'model']));
-    const relaxXi    = sel.xi !== null &&
-                       has(new Set(['filter', 'xi']));
-    if (relaxModel && !relaxXi) {
-      return `Unavailable with model ${sel.model}`;
+  const CONSTRAINTS = [
+    ['model',  () => sel.modelKey !== null, () => `with model ${sel.model}`],
+    ['filter', () => sel.filter   !== null, () => `with filter ${sel.filter}`],
+    ['xi',     () => sel.xi       !== null, () => `at \u03be = ${fmtXi(sel.xi)} km/s`],
+    ['teff',   () => sel.teff     !== null, () => `at Teff = ${sel.teffText}`],
+    ['logg',   () => sel.logg     !== null, () => `at Log(g) = ${sel.loggText}`],
+    ['feh',    () => sel.feh      !== null, () => `at [Fe/H] = ${sel.fehText}`],
+  ];
+  function combinations(arr, k) {
+    const out = [];
+    (function rec(start, acc) {
+      if (acc.length === k) { out.push(acc.slice()); return; }
+      for (let i = start; i < arr.length; i++) { acc.push(arr[i]); rec(i + 1, acc); acc.pop(); }
+    })(0, []);
+    return out;
+  }
+  // Phrases that name a combination read on from one another; a second "with"
+  // becomes "together with" so two dropdown names do not collide.
+  const joinCombination = (phrases) => phrases
+    .map((p, i) => (i > 0 && p.startsWith('with ') ? 'together ' + p : p))
+    .join(' ');
+  // In an "or" list a second dropdown phrase drops its "with": "with model
+  // PHOENIX or filter TESS". Value phrases keep their "at": "or at Teff = ...".
+  const joinOr = (phrases) => phrases
+    .map((p, i) => (i > 0 && p.startsWith('with ') && phrases[i - 1].startsWith('with ')
+                    ? p.slice(5) : p))
+    .join(' or ');
+  function explain(field, matches) {
+    const has = (skip, strict) => grids.some(g => matches(g) && ok(g, skip, strict));
+    if (has(new Set([field]))) return null;                  // it is available
+    const others = CONSTRAINTS.filter(([name, isSet]) => name !== field && isSet());
+    const relax = (names, strict) => has(new Set([field, ...names]), strict);
+    let opens = others.filter(([name]) => relax([name]));
+    // When the typed [Fe/H] is itself a cause, do not offer as an alternative a
+    // change that only works because a solar-only table would set that
+    // metallicity aside; name the metallicity.
+    if (opens.some(o => o[0] === 'feh')) {
+      opens = opens.filter(o => o[0] === 'feh' || relax([o[0]], true));
     }
-    if (relaxXi && !relaxModel) {
-      return `Unavailable at \u03be = ${fmtXi(sel.xi)} km/s`;
-    }
-    /* Wording rule for the two-setting cases, shared by all three dropdowns:
-       when EACH setting alone blocks the option (so both must change), join
-       them with "or": the option is unavailable under either condition.
-       When only the COMBINATION blocks it (so changing either one would open
-       it), name the combination with no conjunction. */
-    if (relaxModel && relaxXi) {
-      // only the combination blocks it; either change alone would open it
-      return `Unavailable with model ${sel.model} at ` +
-             `\u03be = ${fmtXi(sel.xi)} km/s`;
-    }
-    if (has(new Set(['filter', 'model', 'xi']))) {
-      // each setting alone blocks it; both must change
-      return `Unavailable with model ${sel.model} or at ` +
-             `\u03be = ${fmtXi(sel.xi)} km/s`;
+    if (opens.length === 1) return 'Unavailable ' + opens[0][2]();
+    if (opens.length >= 2)  return 'Unavailable ' + joinCombination(opens.map(o => o[2]()));
+    for (let size = 2; size <= Math.min(3, others.length); size++) {
+      for (const combo of combinations(others, size)) {
+        if (relax(combo.map(c => c[0]))) {
+          return 'Unavailable ' + joinOr(combo.map(c => c[2]()));
+        }
+      }
     }
     return 'Unavailable';
   }
+  const filterReason = (code) => explain('filter', g => g.filter === code);
+  // Models are matched on the DISPLAY name, not the underlying key. PHOENIX and
+  // PHOENIX-COND share one key, so keying on it would report a grid as
+  // reachable under a label the current filter does not actually offer.
+  const modelReason  = (name) => explain('model',  g => g.model === name);
+  const xiReason     = (value) => explain('xi',    g => g.xi === value);
 
   const fRaw = optionsFor('filter', 'filter');
   const filterOpts = fRaw.all
@@ -631,35 +678,6 @@ function scoEvaluate(state, capabilities) {
   // No sort: the capability list already arrives in the registry's own order,
   // which is the physical ordering the page has always shown (U, B, V, R, I,
   // J, H, K rather than alphabetical). Sorting would scramble it.
-  /* Why is a given model currently unavailable? Mirror of filterReason: relax
-     one constraint at a time and see which single change would make the model
-     reachable, so the label can name the setting to alter. */
-  function modelReason(name) {
-    // Match on the DISPLAY name, not the underlying key. PHOENIX and
-    // PHOENIX-COND share one key, so keying on it would report a grid as
-    // reachable under a label the current filter does not actually offer.
-    const has = (skip) => grids.some(g => g.model === name && ok(g, skip));
-    if (has(new Set(['model']))) return null;               // it is available
-    const relaxFilter = sel.filter !== null && has(new Set(['model', 'filter']));
-    const relaxXi     = sel.xi !== null && has(new Set(['model', 'xi']));
-    if (relaxFilter && !relaxXi) {
-      return `Unavailable with filter ${sel.filter}`;
-    }
-    if (relaxXi && !relaxFilter) {
-      return `Unavailable at \u03be = ${fmtXi(sel.xi)} km/s`;
-    }
-    if (relaxFilter && relaxXi) {
-      // only the combination blocks it; either change alone would open it
-      return `Unavailable with filter ${sel.filter} at ` +
-             `\u03be = ${fmtXi(sel.xi)} km/s`;
-    }
-    if (has(new Set(['model', 'filter', 'xi']))) {
-      // each setting alone blocks it; both must change (see rule above)
-      return `Unavailable with filter ${sel.filter} or at ` +
-             `\u03be = ${fmtXi(sel.xi)} km/s`;
-    }
-    return 'Unavailable';
-  }
 
   const mRaw = optionsFor('model', 'model');
   const modelOpts = mRaw.all.map(m => ({
@@ -667,32 +685,6 @@ function scoEvaluate(state, capabilities) {
     available: mRaw.available.includes(m),
     reason: mRaw.available.includes(m) ? null : modelReason(m),
   }));
-  /* Why is a given velocity unavailable? Same relax-one-constraint technique,
-     naming the model or the filter responsible. In practice this is almost
-     always the model: ATLAS carries all five velocities and every
-     PHOENIX-family model carries only 2. */
-  function xiReason(value) {
-    const has = (skip) => grids.some(g => g.xi === value && ok(g, skip));
-    if (has(new Set(['xi']))) return null;                  // it is available
-    const relaxModel  = sel.model !== null && has(new Set(['xi', 'model']));
-    const relaxFilter = sel.filter !== null && has(new Set(['xi', 'filter']));
-    if (relaxModel && !relaxFilter) {
-      return `Unavailable with model ${sel.model}`;
-    }
-    if (relaxFilter && !relaxModel) {
-      return `Unavailable with filter ${sel.filter}`;
-    }
-    if (relaxModel && relaxFilter) {
-      // only the combination blocks it; either change alone would open it
-      return `Unavailable with model ${sel.model} together with ` +
-             `filter ${sel.filter}`;
-    }
-    if (has(new Set(['xi', 'model', 'filter']))) {
-      // each setting alone blocks it; both must change (see rule above)
-      return `Unavailable with model ${sel.model} or filter ${sel.filter}`;
-    }
-    return 'Unavailable';
-  }
 
   const xRaw = optionsFor('xi', 'xi');
   const xiOpts = xRaw.all.sort((a, b) => a - b)
@@ -959,6 +951,10 @@ function scoReadState() {
     teff:   $('teff').value.trim() === '' ? null : Number($('teff').value),
     logg:   $('logg').value.trim() === '' ? null : Number($('logg').value),
     feh:    $('feh').value.trim() === '' ? null : Number($('feh').value),
+    // the text as typed, so a tag can echo it ("at Teff = 3000")
+    teffText: $('teff').value.trim(),
+    loggText: $('logg').value.trim(),
+    fehText:  $('feh').value.trim(),
   };
 }
 
