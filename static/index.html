@@ -1461,8 +1461,10 @@ form.addEventListener('submit', async (ev) => {
     statusEl.textContent = noFilter
       ? 'Please select a filter.'
       : 'Please select a stellar model for this filter.';
-    statusEl.classList.remove('text-success', 'text-muted');
-    statusEl.classList.add('text-danger');
+    // Black, like the informational notes: nothing has been refused, the form
+    // is just not complete yet. Red is reserved for a refusal from the service.
+    statusEl.classList.remove('text-success', 'text-muted', 'text-danger');
+    statusEl.classList.add('sco-note');
     $(noFilter ? 'filter' : 'model').focus();
     clearResult();
     return;
@@ -1480,8 +1482,8 @@ form.addEventListener('submit', async (ev) => {
     statusEl.textContent = missing.length === 1
       ? `Please fill in the ${labels} field.`
       : `Please fill in these fields: ${labels}.`;
-    statusEl.classList.remove('text-success', 'text-muted');
-    statusEl.classList.add('text-danger');
+    statusEl.classList.remove('text-success', 'text-muted', 'text-danger');
+    statusEl.classList.add('sco-note');
     $(missing[0].id).focus();
     clearResult();
     return;
