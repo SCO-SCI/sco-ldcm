@@ -187,7 +187,7 @@
 <div class="container py-3" style="max-width: 820px; margin-top: 1.5rem;">
 
   <h1 class="mb-1">SCO-LDC API Reference</h1>
-  <p class="ver-tag mb-1">API version 4.0 &middot; Document version 2026-08-27</p>
+  <p class="ver-tag mb-1">API version 5.0 &middot; Document version 2026-09-10</p>
   <p class="mb-2">
     This document describes the HTTP/JSON API of <code>sco-ldc</code>, a web service that returns
     stellar limb-darkening coefficients by trilinear interpolation of published Claret and
@@ -212,12 +212,13 @@
     <a href="#endpoints"><span class="n">3</span>Endpoints overview</a>
     <a href="#health"><span class="n">4</span>GET /api/health</a>
     <a href="#filters"><span class="n">5</span>GET /api/filters</a>
-    <a href="#resolve"><span class="n">6</span>GET /api/resolve</a>
-    <a href="#compute"><span class="n">7</span>GET /api/compute</a>
-    <a href="#errors"><span class="n">8</span>Error responses</a>
-    <a href="#impl"><span class="n">9</span>Implementation notes</a>
-    <a href="#examples"><span class="n">10</span>Example calls</a>
-    <a href="#code"><span class="n">11</span>Code</a>
+    <a href="#capabilities"><span class="n">6</span>GET capabilities</a>
+    <a href="#resolve"><span class="n">7</span>GET /api/resolve</a>
+    <a href="#compute"><span class="n">8</span>GET /api/compute</a>
+    <a href="#errors"><span class="n">9</span>Error responses</a>
+    <a href="#impl"><span class="n">10</span>Implementation notes</a>
+    <a href="#examples"><span class="n">11</span>Example calls</a>
+    <a href="#code"><span class="n">12</span>Code</a>
   </nav>
 
   <hr>
@@ -245,6 +246,12 @@
     return quadratic coefficients (u<sub>1</sub>, u<sub>2</sub>). Existing integrations that call the
     unprefixed endpoints require no changes: the unprefixed path is, and will remain, the quadratic law.
     New laws are offered only through their own prefixes and never change the meaning of the unprefixed path.</p>
+
+    <h3>Microturbulent velocity &xi;</h3>
+    <p class="mb-2">The prefixed compute and filters endpoints accept an optional microturbulent velocity &xi;, passed as the
+    query parameter <code>xi</code> in km/s, with the published values 0, 1, 2, 4 and 8 and a default of 2. The unprefixed
+    legacy alias does not take this parameter: any <code>xi</code> given there is ignored and the alias returns exactly what it
+    always has, the 2 km/s tables. Details are in the compute section.</p>
 
     <h3>Authentication</h3>
     <p class="mb-2">None. sco-ldc&rsquo;s API is open and does not require API keys, tokens, registration, or any
@@ -294,6 +301,15 @@
       <li>New optional parameters may be added to existing endpoints</li>
       <li>New response fields may be added to existing responses (callers should not fail if they encounter unknown fields)</li>
     </ul>
+    <p class="mb-2">Version 5.0 (September 2026) added, under these rules and without changing any existing behaviour:</p>
+    <ul class="notes">
+      <li>An optional microturbulent velocity &xi; (<code>xi</code>) on the prefixed compute and filters endpoints</li>
+      <li>A <code>xi</code> field in every prefixed compute response, reporting the velocity used</li>
+      <li>A capabilities endpoint under each law prefix (<code>/quad/api/capabilities</code> and its siblings)</li>
+      <li>Two new HTTP 400 refusals, reachable only when &xi; is given</li>
+    </ul>
+    <p class="mb-2">The unprefixed <code>/api/&hellip;</code> alias was left untouched by version 5.0: its responses are byte-for-byte
+    what they were before it.</p>
     <div class="note-box">
       If breaking changes ever become necessary, they will be exposed through versioned URL paths
       (e.g., <code>/api/v2/compute</code>) rather than by modifying the existing endpoints. Callers can continue
@@ -313,9 +329,10 @@
         <tr><td><span class="method">GET</span> <code>/api/filters</code></td><td>Filter catalog and model coverage (quadratic; legacy alias)</td></tr>
         <tr><td><span class="method">GET</span> <code>/api/resolve</code></td><td>Resolve an exoplanet name or TOI to host-star T<sub>eff</sub>/logg/[Fe/H]</td></tr>
         <tr><td><span class="method">GET</span> <code>/api/compute</code></td><td>Compute (u<sub>1</sub>, u<sub>2</sub>) &mdash; quadratic; legacy alias</td></tr>
-        <tr><td><span class="method">GET</span> <code>/quad/api/&hellip;</code></td><td>Quadratic law (health, filters, resolve, compute &rarr; u<sub>1</sub>, u<sub>2</sub>)</td></tr>
-        <tr><td><span class="method">GET</span> <code>/power2/api/&hellip;</code></td><td>Power-2 law (health, filters, resolve, compute &rarr; g, h)</td></tr>
-        <tr><td><span class="method">GET</span> <code>/fourparam/api/&hellip;</code></td><td>Four-parameter law (health, filters, resolve, compute &rarr; a<sub>1</sub>, a<sub>2</sub>, a<sub>3</sub>, a<sub>4</sub>)</td></tr>
+        <tr><td><span class="method">GET</span> <code>/quad/api/&hellip;</code></td><td>Quadratic law (health, filters, capabilities, resolve, compute &rarr; u<sub>1</sub>, u<sub>2</sub>)</td></tr>
+        <tr><td><span class="method">GET</span> <code>/power2/api/&hellip;</code></td><td>Power-2 law (health, filters, capabilities, resolve, compute &rarr; g, h)</td></tr>
+        <tr><td><span class="method">GET</span> <code>/fourparam/api/&hellip;</code></td><td>Four-parameter law (health, filters, capabilities, resolve, compute &rarr; a<sub>1</sub>, a<sub>2</sub>, a<sub>3</sub>, a<sub>4</sub>)</td></tr>
+        <tr><td><span class="method">GET</span> <code>/<em>law</em>/api/capabilities</code></td><td>Every filter, model and velocity combination the law holds, with grid ranges (no legacy alias)</td></tr>
       </tbody>
     </table>
     <p class="mb-2">The unprefixed <code>/api/&hellip;</code> endpoints are the legacy quadratic alias and are
@@ -388,7 +405,11 @@
     <p class="mb-2">Returns the catalog of filters available and, per filter, which stellar atmosphere models are populated
     along with their parameter grid ranges. Calling <code>/api/filters</code> is the authoritative way to discover what&rsquo;s
     currently supported; new filters or new model coverage can appear in future versions.</p>
-    <p class="mb-2"><strong>Required parameters:</strong> none. &middot; <strong>Optional parameters:</strong> none.</p>
+    <p class="mb-2"><strong>Required parameters:</strong> none. &middot; <strong>Optional parameters:</strong> on the prefixed
+    paths only, <code>xi</code>, the microturbulent velocity &xi; in km/s (0, 1, 2, 4 or 8; default 2). When &xi; is given, the
+    catalog lists only the models that have a table at that velocity, and the ranges and point counts describe that velocity&rsquo;s
+    table. Since every table at a velocity other than 2 is ATLAS at solar metallicity, a catalog requested at 0, 1, 4 or 8 km/s
+    contains ATLAS entries only, with <code>feh_fixed</code> true. The unprefixed alias takes no parameters.</p>
 
     <h3>Response (HTTP 200, abbreviated to one filter entry)</h3>
     <pre class="code">{
@@ -407,7 +428,7 @@
           <span class="c-key">"logg_min"</span>: <span class="c-num">0.0</span>,    <span class="c-key">"logg_max"</span>: <span class="c-num">5.0</span>,
           <span class="c-key">"feh_min"</span>:  <span class="c-num">-5.0</span>,   <span class="c-key">"feh_max"</span>:  <span class="c-num">1.0</span>,
           <span class="c-key">"feh_fixed"</span>: <span class="c-bool">false</span>,
-          <span class="c-key">"n_points"</span>: <span class="c-num">7813</span>
+          <span class="c-key">"n_points"</span>: <span class="c-num">7695</span>
         },
         {
           <span class="c-key">"model"</span>: <span class="c-str">"PHOENIX"</span>,
@@ -416,7 +437,7 @@
           <span class="c-key">"logg_min"</span>: <span class="c-num">3.5</span>,    <span class="c-key">"logg_max"</span>: <span class="c-num">5.0</span>,
           <span class="c-key">"feh_min"</span>:  <span class="c-num">0.0</span>,    <span class="c-key">"feh_max"</span>:  <span class="c-num">0.0</span>,
           <span class="c-key">"feh_fixed"</span>: <span class="c-bool">true</span>,
-          <span class="c-key">"n_points"</span>: <span class="c-num">116</span>
+          <span class="c-key">"n_points"</span>: <span class="c-num">140</span>
         }
       ]
     }
@@ -441,12 +462,12 @@
       <thead><tr><th style="width:16%;">Field</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
       <tbody>
         <tr><td><code>model</code></td><td><span class="type">string</span></td><td>Display name used in <code>/api/compute</code>&rsquo;s model parameter</td></tr>
-        <tr><td><code>model_key</code></td><td><span class="type">string</span></td><td>Internal storage key; identical to model except for TESS (PHOENIX-COND displays as such but is stored as PHOENIX)</td></tr>
+        <tr><td><code>model_key</code></td><td><span class="type">string</span></td><td>Internal storage key; identical to model except where PHOENIX-COND is displayed (TESS, CHEOPS, and every PHOENIX-COND band under power-2 and four-parameter), which is stored as PHOENIX</td></tr>
         <tr><td><code>teff_min/max</code></td><td><span class="type">number</span></td><td>Grid extent in K. Inclusive bounds. Inputs outside fail</td></tr>
         <tr><td><code>logg_min/max</code></td><td><span class="type">number</span></td><td>Grid extent in cgs dex</td></tr>
         <tr><td><code>feh_min/max</code></td><td><span class="type">number</span></td><td>Grid extent in dex. For PHOENIX models, a single value at 0.0</td></tr>
         <tr><td><code>feh_fixed</code></td><td><span class="type">boolean</span></td><td>true if the grid has only one [Fe/H] value (solar metallicity only)</td></tr>
-        <tr><td><code>n_points</code></td><td><span class="type">integer</span></td><td>Total grid points populated for this filter+model combination</td></tr>
+        <tr><td><code>n_points</code></td><td><span class="type">integer</span></td><td>Grid points populated for this filter+model combination at the requested velocity (2 km/s unless <code>xi</code> was given)</td></tr>
       </tbody>
     </table>
 
@@ -457,14 +478,82 @@
       <li>The <code>model</code> parameter to <code>/api/compute</code> accepts the display name from the model field. Accepted values are &lsquo;ATLAS&rsquo;, &lsquo;PHOENIX&rsquo;, and &lsquo;PHOENIX-COND&rsquo;. Not every filter supports every model; the models array per filter is the authoritative list.</li>
       <li>This catalog (via the unprefixed <code>/api/filters</code> or <code>/quad/api/filters</code>) is the quadratic filter set. The power-2 law has its own catalog at <code>/power2/api/filters</code> with a different filter set (it adds the Gaia bands and omits CoRoT and Spitzer) and its own model coverage. The four-parameter law has its own catalog at <code>/fourparam/api/filters</code> as well (it includes the Gaia bands and the CoRoT and Spitzer bands, but omits CBB). Query the catalog under the prefix of the law you intend to use.</li>
       <li>When the <code>feh_fixed</code> flag is true, passing a feh value other than 0.0 to <code>/api/compute</code> will be rejected. The default feh=0.0 works correctly.</li>
+      <li>The ranges in this catalog are the envelope of each table. The tables are not rectangular inside their envelopes;
+      see &ldquo;The ATLAS grid&rdquo; in the compute section for where a request inside the envelope can still be refused.</li>
+      <li>For the complete picture in one call, including every velocity, use the capabilities endpoint described next.</li>
     </ul>
   </section>
 
   <hr>
 
-  <!-- 6. RESOLVE -->
+  <!-- 6. CAPABILITIES -->
+  <section id="capabilities" class="doc-sec">
+    <h2><span class="sec-num">6</span>GET capabilities</h2>
+    <div class="endpoint-head"><span class="method">GET</span><span class="endpoint-path">/quad/api/capabilities &middot; /power2/api/capabilities &middot; /fourparam/api/capabilities</span></div>
+    <p class="mb-2">Returns, for one law, every filter, model and microturbulent velocity combination that has a table, with the
+    grid envelope and point count of each. It is the filters catalog expanded across &xi;: where <code>/api/filters</code> gives
+    one entry per model at a single velocity, this endpoint gives one entry per model per velocity. A client that wants to
+    validate a request before sending it, or to build a form that only offers what exists, needs one call here per law. There is
+    no unprefixed alias.</p>
+    <p class="mb-2"><strong>Required parameters:</strong> none. &middot; <strong>Optional parameters:</strong> none.</p>
+
+    <h3>Response (HTTP 200, abbreviated to one filter entry and two of its grids)</h3>
+    <pre class="code">{
+  <span class="c-key">"capabilities"</span>: [
+    {
+      <span class="c-key">"code"</span>: <span class="c-str">"V"</span>,
+      <span class="c-key">"name"</span>: <span class="c-str">"Johnson V"</span>,
+      <span class="c-key">"category"</span>: <span class="c-str">"Johnson-Cousins"</span>,
+      <span class="c-key">"source"</span>: <span class="c-str">"CB2011"</span>,
+      <span class="c-key">"citation"</span>: <span class="c-str">"Claret &amp; Bloemen (2011, A&amp;A 529, A75)"</span>,
+      <span class="c-key">"grids"</span>: [
+        {
+          <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>, <span class="c-key">"model_key"</span>: <span class="c-str">"ATLAS"</span>, <span class="c-key">"xi"</span>: <span class="c-num">2.0</span>,
+          <span class="c-key">"teff_min"</span>: <span class="c-num">3500.0</span>, <span class="c-key">"teff_max"</span>: <span class="c-num">50000.0</span>,
+          <span class="c-key">"logg_min"</span>: <span class="c-num">0.0</span>,    <span class="c-key">"logg_max"</span>: <span class="c-num">5.0</span>,
+          <span class="c-key">"feh_min"</span>:  <span class="c-num">-5.0</span>,   <span class="c-key">"feh_max"</span>:  <span class="c-num">1.0</span>,
+          <span class="c-key">"feh_fixed"</span>: <span class="c-bool">false</span>,
+          <span class="c-key">"n_points"</span>: <span class="c-num">7695</span>
+        },
+        {
+          <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>, <span class="c-key">"model_key"</span>: <span class="c-str">"ATLAS"</span>, <span class="c-key">"xi"</span>: <span class="c-num">8.0</span>,
+          <span class="c-key">"teff_min"</span>: <span class="c-num">3500.0</span>, <span class="c-key">"teff_max"</span>: <span class="c-num">50000.0</span>,
+          <span class="c-key">"logg_min"</span>: <span class="c-num">0.0</span>,    <span class="c-key">"logg_max"</span>: <span class="c-num">5.0</span>,
+          <span class="c-key">"feh_min"</span>:  <span class="c-num">0.0</span>,    <span class="c-key">"feh_max"</span>:  <span class="c-num">0.0</span>,
+          <span class="c-key">"feh_fixed"</span>: <span class="c-bool">true</span>,
+          <span class="c-key">"n_points"</span>: <span class="c-num">456</span>
+        }
+      ]
+    }
+  ]
+}</pre>
+
+    <h3>Field semantics</h3>
+    <table class="api">
+      <thead><tr><th style="width:22%;">Field</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>code</code>, <code>name</code>, <code>category</code>, <code>source</code>, <code>citation</code></td><td><span class="type">string</span></td><td>As in <code>/api/filters</code></td></tr>
+        <tr><td><code>grids</code></td><td><span class="type">array</span></td><td>One entry per model per velocity that has a table for this filter. Under the quadratic law an ATLAS filter has five entries and a PHOENIX filter one</td></tr>
+        <tr><td><code>grids[].model</code>, <code>model_key</code></td><td><span class="type">string</span></td><td>As in <code>/api/filters</code></td></tr>
+        <tr><td><code>grids[].xi</code></td><td><span class="type">number</span></td><td>Microturbulent velocity &xi; of this table, km/s</td></tr>
+        <tr><td><code>grids[].teff_min/max</code>, <code>logg_min/max</code>, <code>feh_min/max</code>, <code>feh_fixed</code>, <code>n_points</code></td><td>&nbsp;</td><td>As in <code>/api/filters</code>, for this velocity&rsquo;s table</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Notes for callers</h3>
+    <ul class="notes">
+      <li>The three laws hold 146, 138 and 139 grids respectively: 46, 46 and 47 at 2 km/s, and one per ATLAS filter at each of the other four velocities.</li>
+      <li>Entries whose <code>xi</code> is not 2 are always ATLAS with <code>feh_fixed</code> true. Entries for PHOENIX and PHOENIX-COND always have <code>xi</code> 2.</li>
+      <li>The envelope fields describe the box that contains the table, not the table itself. The point counts tell the rest of the story: the ATLAS table at 2 km/s fills 46.6 percent of its box. Where inside the box a request can be refused is described under &ldquo;The ATLAS grid&rdquo; in the compute section.</li>
+      <li>This endpoint is what the sco-ldc web page reads to decide which dropdown entries to offer.</li>
+    </ul>
+  </section>
+
+  <hr>
+
+  <!-- 7. RESOLVE -->
   <section id="resolve" class="doc-sec">
-    <h2><span class="sec-num">6</span>GET /api/resolve</h2>
+    <h2><span class="sec-num">7</span>GET /api/resolve</h2>
     <div class="endpoint-head"><span class="method">GET</span><span class="endpoint-path">/api/resolve</span></div>
     <p class="mb-2">Looks up an exoplanet name or TESS Object of Interest (TOI) candidate identifier and returns host-star
     stellar parameters from the authoritative source (NEA for confirmed planets; ExoFOP-TESS for TOI candidates not in NEA).</p>
@@ -555,7 +644,7 @@
 
   <!-- 7. COMPUTE -->
   <section id="compute" class="doc-sec">
-    <h2><span class="sec-num">7</span>GET compute (quadratic, power-2, and four-parameter)</h2>
+    <h2><span class="sec-num">8</span>GET compute (quadratic, power-2, and four-parameter)</h2>
     <div class="endpoint-head"><span class="method">GET</span><span class="endpoint-path">/api/compute &middot; /quad/api/compute &middot; /power2/api/compute &middot; /fourparam/api/compute</span></div>
     <p class="mb-2">Computes limb-darkening coefficients by trilinear interpolation of the coefficient table
     corresponding to the requested filter and atmosphere model. This is the main computational endpoint.
@@ -580,6 +669,7 @@
       <tbody>
         <tr><td><code>feh</code></td><td><span class="type">number</span></td><td>Metallicity [Fe/H] in dex. Defaults to 0.0 if omitted</td></tr>
         <tr><td><code>model</code></td><td><span class="type">string</span></td><td>&lsquo;ATLAS&rsquo;, &lsquo;PHOENIX&rsquo;, or &lsquo;PHOENIX-COND&rsquo;. Defaults to &lsquo;ATLAS&rsquo; if omitted</td></tr>
+        <tr><td><code>xi</code></td><td><span class="type">number</span></td><td>Microturbulent velocity &xi; in km/s: 0, 1, 2, 4 or 8. Defaults to 2 if omitted. Prefixed paths only; the unprefixed alias ignores it. Values other than 2 exist for ATLAS at solar metallicity only (see &ldquo;Microturbulent velocity &xi;&rdquo; below)</td></tr>
       </tbody>
     </table>
 
@@ -597,13 +687,29 @@
     <span class="c-key">"feh_bracket"</span>: [<span class="c-num">-0.5</span>, <span class="c-num">0.0</span>],
     <span class="c-key">"fractions"</span>: { <span class="c-key">"teff"</span>: <span class="c-num">0.4</span>, <span class="c-key">"logg"</span>: <span class="c-num">0.8</span>, <span class="c-key">"feh"</span>: <span class="c-num">0.9</span> },
     <span class="c-key">"on_grid"</span>: <span class="c-bool">false</span>
-  }
+  },
+  <span class="c-key">"xi"</span>: <span class="c-num">2.0</span>
 }</pre>
-    <p class="mb-2" style="color:#4c555d;">(The numeric values above are illustrative; actual values from the live API may differ.)</p>
+    <p class="mb-2" style="color:#4c555d;">(The numeric values above are illustrative; actual values from the live API may differ.
+    The <code>xi</code> field is present on the prefixed paths only; the unprefixed alias omits it.)</p>
 
     <h3>Response on invalid input (HTTP 400)</h3>
     <pre class="code">{
   <span class="c-key">"detail"</span>: <span class="c-str">"Invalid Input (Teff = 1500.0 K): The PHOENIX model does not support values of Teff below 2000 K."</span>
+}</pre>
+
+    <h3>Response on an unsupported velocity (HTTP 400, prefixed paths only)</h3>
+    <p class="mb-2">A value of &xi; other than the five published ones:</p>
+    <pre class="code">{
+  <span class="c-key">"detail"</span>: <span class="c-str">"Invalid Input (microturbulent velocity = 3 km/s): coefficients are published only at 0, 1, 2, 4, 8 km/s."</span>
+}</pre>
+    <p class="mb-2">A published value of &xi; other than 2 for a table that exists at 2 km/s only, which is every PHOENIX and PHOENIX-COND table:</p>
+    <pre class="code">{
+  <span class="c-key">"detail"</span>: <span class="c-str">"Invalid Input (microturbulent velocity = 8 km/s): the PHOENIX table for filter V is published only at 2 km/s."</span>
+}</pre>
+    <p class="mb-2">A non-solar metallicity at a velocity other than 2 is refused by the existing metallicity rule, since those tables are solar only:</p>
+    <pre class="code">{
+  <span class="c-key">"detail"</span>: <span class="c-str">"[Fe/H] -0.5 not available for V/ATLAS (solar metallicity only: +0.0)"</span>
 }</pre>
 
     <h3>Field semantics</h3>
@@ -623,6 +729,7 @@
         <tr><td><code>grid.fractions.logg</code></td><td><span class="type">number</span></td><td>Same for logg</td></tr>
         <tr><td><code>grid.fractions.feh</code></td><td><span class="type">number</span></td><td>Same for [Fe/H]</td></tr>
         <tr><td><code>grid.on_grid</code></td><td><span class="type">boolean</span></td><td>true if the input falls exactly on a grid point (no interpolation)</td></tr>
+        <tr><td><code>xi</code></td><td><span class="type">number</span></td><td>The microturbulent velocity &xi; used, km/s (2.0 when the parameter was omitted). Prefixed paths only</td></tr>
       </tbody>
     </table>
 
@@ -634,7 +741,8 @@
   <span class="c-key">"filter_name"</span>: <span class="c-str">"Johnson V"</span>,
   <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>,
   <span class="c-key">"citation"</span>: <span class="c-str">"Claret &amp; Southworth (2022, A&amp;A 664, A128)"</span>,
-  <span class="c-key">"grid"</span>: { <span class="c-str">&hellip; same structure as the quadratic response &hellip;</span> }
+  <span class="c-key">"grid"</span>: { <span class="c-str">&hellip; same structure as the quadratic response &hellip;</span> },
+  <span class="c-key">"xi"</span>: <span class="c-num">2.0</span>
 }</pre>
     <p class="mb-2" style="color:#4c555d;">The power-2 response is identical in shape to the quadratic response except
     that the tabulated coefficient fields are <code>g</code> and <code>h</code> (the power-2 coefficients) rather than
@@ -661,7 +769,8 @@
   <span class="c-key">"filter_name"</span>: <span class="c-str">"Johnson V"</span>,
   <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>,
   <span class="c-key">"citation"</span>: <span class="c-str">"Claret &amp; Bloemen (2011, A&amp;A 529, A75)"</span>,
-  <span class="c-key">"grid"</span>: { <span class="c-str">&hellip; same structure as the quadratic response &hellip;</span> }
+  <span class="c-key">"grid"</span>: { <span class="c-str">&hellip; same structure as the quadratic response &hellip;</span> },
+  <span class="c-key">"xi"</span>: <span class="c-num">2.0</span>
 }</pre>
     <p class="mb-2" style="color:#4c555d;">The four-parameter response is identical in shape to the quadratic and power-2 responses except
     that the tabulated coefficient fields are <code>a1</code>, <code>a2</code>, <code>a3</code>, and <code>a4</code>
@@ -705,6 +814,52 @@
       <li>a<sub>1</sub>&ndash;a<sub>4</sub> are returned as full-precision IEEE 754 doubles. The Claret published values are themselves to 4 decimal places; sco-ldc does not artificially round the interpolation result.</li>
     </ul>
 
+    <h3>Microturbulent velocity &xi;</h3>
+    <p class="mb-2">Claret&rsquo;s ATLAS tables are published at five microturbulent velocities, 0, 1, 2, 4 and 8 km/s. Before
+    version 5.0 the service held the 2 km/s tables only; it now holds all five, and the prefixed compute endpoints select among
+    them with the <code>xi</code> parameter. The tables at 0, 1, 4 and 8 km/s exist for ATLAS at solar metallicity only, for every
+    ATLAS filter in every law. The PHOENIX and PHOENIX-COND tables exist at 2 km/s only.</p>
+    <ul class="notes">
+      <li>The four non-default tables share the ATLAS envelope, 3500 to 50000 K and log g 0 to 5, and the same temperature nodes as the
+      solar 2 km/s grid except that the three half-step nodes at 37500, 42500 and 47500 K do not exist at these velocities. A request at
+      one of those temperatures is bracketed between its 1000 K neighbours like any other off-node value.</li>
+      <li>They are not identical to the 2 km/s grid cell for cell. The 2 km/s solar grid has 476 populated cells; 0 and 1 km/s have 485,
+      4 km/s has 465 and 8 km/s has 456. The 0 and 1 km/s tables add nine cells at the low-gravity edge (log g 2.0 at 12000 to 13000 K in
+      250 K steps and at 15000 and 16000 K, and log g 4.5 at 50000 K, among them). The 4 km/s table lacks eleven cells that 2 km/s has,
+      and the 8 km/s table lacks twenty, all along the low-gravity edge of the hot stars: at 8 km/s these are log g 2.0 at 11000 to 11750 K
+      and 14000 K, log g 2.5 at 18000 and 19000 K, log g 3.0 at 25000 and 26000 K, log g 3.5 at 31000 K, log g 4.0 at 37000 to 39000 K,
+      and log g 4.5 at 43000 to 49000 K. A request at one of those cells returns a value at 2 km/s and HTTP 400 at 4 or 8 km/s.</li>
+      <li>The response reports the velocity used in its <code>xi</code> field, so a caller can confirm which table answered.</li>
+      <li>The unprefixed alias has no access to these tables and never will; it is the 2 km/s quadratic service, unchanged.</li>
+    </ul>
+
+    <h3>The ATLAS grid: two node sets and the gravity floor</h3>
+    <p class="mb-2">The ATLAS envelope reported by the catalog, 3500 to 50000 K, log g 0 to 5 and [Fe/H] &minus;5 to +1, encloses
+    16,511 cells of which 7,695 are populated. The table is not rectangular inside its envelope, and two features of its shape
+    account for most refusals of requests that lie within the advertised ranges.</p>
+    <ul class="notes">
+      <li><strong>Two interleaved temperature grids.</strong> The solar-metallicity grid has a node every 250 K from 3500 to 13000 K and
+      every 1000 K to 50000 K. The non-solar metallicities have a node every 250 K to 10000 K, every 500 K to 13000 K, every 1000 K to
+      35000 K, and then every 2500 K: 37500, 40000, 42500, 45000, 47500 and 50000 K. The interpolation brackets a request on the union
+      of both node sets and requires every corner of the bracketing cell to exist. For a non-solar metallicity this means that between
+      10000 and 13000 K, and above 35000 K, only requests exactly on a non-solar node succeed; a request between two of them brackets
+      against a solar-only node and is refused. At solar metallicity the same temperatures interpolate normally, except that the
+      three half-step nodes carry no solar cell.</li>
+      <li><strong>A gravity floor that rises with temperature.</strong> At solar metallicity all eleven gravities exist up to 6000 K; the
+      lowest available log g is then 0.5 from 6250 K, 1.0 from 7750 K, 1.5 from 8500 K, 2.0 from 9250 K, 2.5 from 12000 K (briefly 2.0
+      again at 14000 K), 3.0 from 20000 K, 3.5 from 27000 K, 4.0 from 32000 K, 4.5 from 40000 K, and 5.0 only at 50000 K. The non-solar
+      grid follows the same floor to 35000 K and is narrower above it: log g 4.5 and 5.0 at 37500 and 40000 K, and 5.0 only from 42500 K.
+      Metallicity +1 ends at 40000 K and +0.5 at 45000 K.</li>
+      <li>The other tables are simpler. The 2011 PHOENIX grid (2000 to 9800 K, log g 3.5 to 5.0, solar) is complete except that it has no
+      node between 5800 and 7000 K, so requests there interpolate across 1200 K. The PHOENIX-COND grids (2300 to 12000 K, solar) have a
+      gravity floor of their own in the log g 0 to 6 tables of power-2 and four-parameter: 0.0 to 5200 K, 0.5 from 5300 K, 1.0 from 6000 K,
+      1.5 from 8400 K and 2.0 from 9400 K, with isolated missing cells at 2800 K and log g 5.5 to 6.0, 3000 K and log g 5.0, and 6800 K
+      and log g 1.5. The quadratic TESS and CHEOPS PHOENIX-COND tables (log g 2.5 to 6 and 3 to 6) lack only the 2800 K, log g 6.0 and
+      3000 K, log g 5.0 cells.</li>
+      <li>The <code>grid</code> block of a successful response shows the bracket actually used, and a refusal within the envelope reads
+      &ldquo;Tables do not include data for this combination&rdquo; with the requested values.</li>
+    </ul>
+
     <h3>Notes specific to the quadratic law</h3>
     <ul class="notes">
       <li>For PHOENIX models in CB2011, the [Fe/H] grid is degenerate (solar metallicity only). Passing feh=0.0 (the default) is correct; passing other values is rejected.</li>
@@ -720,7 +875,7 @@
 
   <!-- 8. ERRORS -->
   <section id="errors" class="doc-sec">
-    <h2><span class="sec-num">8</span>Error responses</h2>
+    <h2><span class="sec-num">9</span>Error responses</h2>
     <p class="mb-2">A summary of every error case the API can return:</p>
     <table class="api">
       <thead><tr><th>Scenario</th><th style="width:16%;">HTTP status</th><th>Body shape</th></tr></thead>
@@ -729,6 +884,10 @@
         <tr><td>/api/resolve planet not found</td><td><span class="status-chip s-2xx">200</span></td><td><code>{ "found": false, &hellip; }</code> (see /api/resolve)</td></tr>
         <tr><td>/api/compute invalid input (out of range)</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip;" }</code></td></tr>
         <tr><td>/api/compute unknown filter or model</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip;" }</code></td></tr>
+        <tr><td>Prefixed compute, &xi; not one of 0, 1, 2, 4, 8</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip; published only at 0, 1, 2, 4, 8 km/s." }</code></td></tr>
+        <tr><td>Prefixed compute, &xi; other than 2 for a PHOENIX or PHOENIX-COND table</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip; published only at 2 km/s." }</code></td></tr>
+        <tr><td>Prefixed compute, non-solar [Fe/H] at &xi; other than 2</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "[Fe/H] &hellip; not available &hellip; (solar metallicity only: +0.0)" }</code></td></tr>
+        <tr><td>Prefixed compute, non-numeric &xi;</td><td><span class="status-chip s-422">422</span></td><td>FastAPI default validation error shape</td></tr>
         <tr><td>Missing required query parameter</td><td><span class="status-chip s-422">422</span></td><td>FastAPI default validation error shape</td></tr>
         <tr><td>Render upstream outage (rare)</td><td><span class="status-chip s-4xx">502 / 503</span></td><td>Render&rsquo;s load balancer page, not JSON</td></tr>
       </tbody>
@@ -753,7 +912,7 @@
 
   <!-- 9. IMPLEMENTATION NOTES -->
   <section id="impl" class="doc-sec">
-    <h2><span class="sec-num">9</span>Implementation notes</h2>
+    <h2><span class="sec-num">10</span>Implementation notes</h2>
 
     <h3>Caching</h3>
     <p class="mb-2">Both the NEA planet table and the ExoFOP TOI table are cached in-memory on the server and refreshed once daily
@@ -795,7 +954,7 @@
 
   <!-- 10. EXAMPLES -->
   <section id="examples" class="doc-sec">
-    <h2><span class="sec-num">10</span>Example calls</h2>
+    <h2><span class="sec-num">11</span>Example calls</h2>
 
     <h3>Health check</h3>
     <pre class="code">GET https://sco-ldc.com/api/health
@@ -826,6 +985,22 @@
     <pre class="code">GET https://sco-ldc.com/api/compute?teff=5150&amp;logg=4.4&amp;filter=V</pre>
     <p class="mb-2" style="color:#4c555d;">Omitting <code>feh</code> defaults to 0.0; omitting <code>model</code> defaults to ATLAS.</p>
 
+    <h3>Compute at a non-default microturbulent velocity</h3>
+    <pre class="code">GET https://sco-ldc.com/quad/api/compute?teff=6000&amp;logg=4.5&amp;feh=0.0&amp;filter=V&amp;model=ATLAS&amp;xi=8
+<span class="prompt">$</span> curl 'https://sco-ldc.com/quad/api/compute?teff=6000&amp;logg=4.5&amp;feh=0.0&amp;filter=V&amp;model=ATLAS&amp;xi=8'</pre>
+    <p class="mb-2" style="color:#4c555d;">Returns u<sub>1</sub>, u<sub>2</sub> from the 8 km/s ATLAS table, with <code>"xi": 8.0</code> in the response.
+    ATLAS and solar metallicity only; the prefixed path is required.</p>
+
+    <h3>Discover what exists at a velocity</h3>
+    <pre class="code">GET https://sco-ldc.com/power2/api/filters?xi=4
+<span class="prompt">$</span> curl 'https://sco-ldc.com/power2/api/filters?xi=4'</pre>
+    <p class="mb-2" style="color:#4c555d;">The power-2 catalog restricted to the 4 km/s tables: ATLAS entries only.</p>
+
+    <h3>Capabilities of a law</h3>
+    <pre class="code">GET https://sco-ldc.com/fourparam/api/capabilities
+<span class="prompt">$</span> curl https://sco-ldc.com/fourparam/api/capabilities</pre>
+    <p class="mb-2" style="color:#4c555d;">Every filter, model and velocity the four-parameter law holds, with envelopes and point counts, in one call.</p>
+
     <h3>Full target-to-LDC chain</h3>
     <p class="mb-2">To produce LDCs for WASP-23 b in Johnson V:</p>
     <ol class="flow">
@@ -840,7 +1015,7 @@
 
   <!-- 11. CODE -->
   <section id="code" class="doc-sec">
-    <h2><span class="sec-num">11</span>Code</h2>
+    <h2><span class="sec-num">12</span>Code</h2>
     <p class="mb-2">Source code repository:
       <a href="https://github.com/SCO-SCI/sco-ldc" target="_blank" rel="noopener">https://github.com/SCO-SCI/sco-ldcm</a>
     </p>
@@ -849,7 +1024,7 @@
   <hr>
 
   <footer class="text-end pb-2">
-    SCO-LDC v4.0.  E. Mullen &middot;
+    SCO-LDC v5.0.  E. Mullen &middot;
     <a href="mailto:sco.sci@outlook.com?subject=SCO-LDC%20inquiry" title="Email Ed Mullen">sco.sci@outlook.com</a>
   </footer>
 
