@@ -46,7 +46,7 @@ app = FastAPI(
     title="scoldcp v4",
     description="Power-2 limb-darkening coefficients (g, h) by trilinear "
                 "interpolation of Claret & Southworth tables.",
-    version="4.0.0",
+    version="5.0.0",
 )
 
 app.add_middleware(

@@ -46,7 +46,7 @@ app = FastAPI(
     title="scoldc v3",
     description="Quadratic limb-darkening coefficients by trilinear interpolation "
                 "of Claret tables.",
-    version="3.1.0",
+    version="5.0.0",
 )
 
 app.add_middleware(

@@ -103,7 +103,7 @@ _refresh_thread.start()
 logger.info("Shared refresh scheduler thread started")
 
 
-app = FastAPI(title="SCO-LDC general (quadratic + power-2 + four-parameter)", version="4.0.0")
+app = FastAPI(title="SCO-LDC general (quadratic + power-2 + four-parameter)", version="5.0.0")
 
 app.mount("/quad", quad_app)
 app.mount("/power2", power2_app)
@@ -155,6 +155,10 @@ def _legacy_health() -> dict:
     # ever replaced. Every other field is passed through untouched.
     result = dict(_quad_health())
     result["tables"] = _quad_ldc_core.row_counts_at_xi(_quad_ldc_core.DEFAULT_XI)
+    # The version field is part of the frozen payload too. The quadratic
+    # engine now reports 5.0.0 on its prefixed route; the legacy route keeps
+    # the string it has always carried.
+    result["version"] = "3.1.0"
     return result
 
 

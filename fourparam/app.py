@@ -47,7 +47,7 @@ app = FastAPI(
     description="Four-parameter (4-term non-linear) limb-darkening coefficients "
                 "(a1, a2, a3, a4) by trilinear interpolation of Claret & Bloemen "
                 "(2011) and Claret & Southworth (2023) tables.",
-    version="4.0.0",
+    version="5.0.0",
 )
 
 app.add_middleware(
