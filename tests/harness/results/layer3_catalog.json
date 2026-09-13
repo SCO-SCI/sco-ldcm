@@ -1,0 +1,17 @@
+{
+ "quad": {
+  "grids_in_code": 146,
+  "grids_advertised": 146,
+  "problems": []
+ },
+ "power2": {
+  "grids_in_code": 138,
+  "grids_advertised": 138,
+  "problems": []
+ },
+ "fourparam": {
+  "grids_in_code": 139,
+  "grids_advertised": 139,
+  "problems": []
+ }
+}

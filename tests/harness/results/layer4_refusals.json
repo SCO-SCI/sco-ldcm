@@ -1,0 +1,152 @@
+{
+ "quad": {
+  "local": {
+   "missing_cell_at_velocity": {
+    "cases": 775,
+    "failures": 0
+   },
+   "same_cell_at_2": {
+    "cases": 775,
+    "failures": 0
+   },
+   "extra_cell_at_low_velocity": {
+    "cases": 450,
+    "failures": 0
+   },
+   "extra_cell_absent_at_2": {
+    "cases": 450,
+    "failures": 0
+   },
+   "half_step_at_velocity": {
+    "cases": 3300,
+    "failures": 0
+   },
+   "non_solar_node_rule": {
+    "cases": 1600,
+    "failures": 0
+   },
+   "unsupported_velocity": {
+    "cases": 100,
+    "failures": 0
+   },
+   "non_solar_at_velocity": {
+    "cases": 100,
+    "failures": 0
+   },
+   "phoenix_family_at_velocity": {
+    "cases": 84,
+    "failures": 0
+   },
+   "phoenix_family_at_2": {
+    "cases": 21,
+    "failures": 0
+   }
+  },
+  "live": {
+   "requests": 60,
+   "failures": 0,
+   "examples": []
+  },
+  "examples": []
+ },
+ "power2": {
+  "local": {
+   "missing_cell_at_velocity": {
+    "cases": 713,
+    "failures": 0
+   },
+   "same_cell_at_2": {
+    "cases": 713,
+    "failures": 0
+   },
+   "extra_cell_at_low_velocity": {
+    "cases": 414,
+    "failures": 0
+   },
+   "extra_cell_absent_at_2": {
+    "cases": 414,
+    "failures": 0
+   },
+   "half_step_at_velocity": {
+    "cases": 3036,
+    "failures": 0
+   },
+   "non_solar_node_rule": {
+    "cases": 1472,
+    "failures": 0
+   },
+   "unsupported_velocity": {
+    "cases": 92,
+    "failures": 0
+   },
+   "non_solar_at_velocity": {
+    "cases": 92,
+    "failures": 0
+   },
+   "phoenix_family_at_velocity": {
+    "cases": 92,
+    "failures": 0
+   },
+   "phoenix_family_at_2": {
+    "cases": 23,
+    "failures": 0
+   }
+  },
+  "live": {
+   "requests": 60,
+   "failures": 0,
+   "examples": []
+  },
+  "examples": []
+ },
+ "fourparam": {
+  "local": {
+   "missing_cell_at_velocity": {
+    "cases": 713,
+    "failures": 0
+   },
+   "same_cell_at_2": {
+    "cases": 713,
+    "failures": 0
+   },
+   "extra_cell_at_low_velocity": {
+    "cases": 414,
+    "failures": 0
+   },
+   "extra_cell_absent_at_2": {
+    "cases": 414,
+    "failures": 0
+   },
+   "half_step_at_velocity": {
+    "cases": 3036,
+    "failures": 0
+   },
+   "non_solar_node_rule": {
+    "cases": 1472,
+    "failures": 0
+   },
+   "unsupported_velocity": {
+    "cases": 92,
+    "failures": 0
+   },
+   "non_solar_at_velocity": {
+    "cases": 92,
+    "failures": 0
+   },
+   "phoenix_family_at_velocity": {
+    "cases": 96,
+    "failures": 0
+   },
+   "phoenix_family_at_2": {
+    "cases": 24,
+    "failures": 0
+   }
+  },
+  "live": {
+   "requests": 60,
+   "failures": 0,
+   "examples": []
+  },
+  "examples": []
+ }
+}

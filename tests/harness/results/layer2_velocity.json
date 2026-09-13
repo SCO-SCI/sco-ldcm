@@ -1,0 +1,80 @@
+{
+ "quad": {
+  "by_velocity": {
+   "xi=0": {
+    "points": 32075,
+    "failures": 0
+   },
+   "xi=1": {
+    "points": 32025,
+    "failures": 0
+   },
+   "xi=2": {
+    "points": 467659,
+    "failures": 0
+   },
+   "xi=4": {
+    "points": 30575,
+    "failures": 0
+   },
+   "xi=8": {
+    "points": 29900,
+    "failures": 0
+   }
+  },
+  "seconds": 24.8,
+  "examples": []
+ },
+ "power2": {
+  "by_velocity": {
+   "xi=0": {
+    "points": 29509,
+    "failures": 0
+   },
+   "xi=1": {
+    "points": 29463,
+    "failures": 0
+   },
+   "xi=2": {
+    "points": 474122,
+    "failures": 0
+   },
+   "xi=4": {
+    "points": 28129,
+    "failures": 0
+   },
+   "xi=8": {
+    "points": 27508,
+    "failures": 0
+   }
+  },
+  "seconds": 24.2,
+  "examples": []
+ },
+ "fourparam": {
+  "by_velocity": {
+   "xi=0": {
+    "points": 29509,
+    "failures": 0
+   },
+   "xi=1": {
+    "points": 29463,
+    "failures": 0
+   },
+   "xi=2": {
+    "points": 474466,
+    "failures": 0
+   },
+   "xi=4": {
+    "points": 28129,
+    "failures": 0
+   },
+   "xi=8": {
+    "points": 27508,
+    "failures": 0
+   }
+  },
+  "seconds": 26.4,
+  "examples": []
+ }
+}

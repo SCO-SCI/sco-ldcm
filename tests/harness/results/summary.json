@@ -1,0 +1,392 @@
+{
+ "run_utc": "2026-09-11 05:12 UTC",
+ "v4": "/home/claude/v4",
+ "v5": "/home/claude/v5",
+ "prod": "https://sco-ldc.com",
+ "test": "https://sco-ldcm.onrender.com",
+ "exit_codes": {
+  "layer3_catalog": 0,
+  "layer4_refusals": 0,
+  "layer1_live": 0
+ },
+ "layers": {
+  "layer1_local": {
+   "quad": {
+    "points": 467659,
+    "by_kind": {
+     "node": 196111,
+     "center": 135774,
+     "random": 135774
+    },
+    "discrepancies": 0,
+    "seconds": 41.3,
+    "examples": []
+   },
+   "power2": {
+    "points": 474122,
+    "by_kind": {
+     "node": 195914,
+     "center": 139104,
+     "random": 139104
+    },
+    "discrepancies": 0,
+    "seconds": 41.2,
+    "examples": []
+   },
+   "fourparam": {
+    "points": 474466,
+    "by_kind": {
+     "node": 196054,
+     "center": 139206,
+     "random": 139206
+    },
+    "discrepancies": 0,
+    "seconds": 44.1,
+    "examples": []
+   }
+  },
+  "layer2_velocity": {
+   "quad": {
+    "by_velocity": {
+     "xi=0": {
+      "points": 32075,
+      "failures": 0
+     },
+     "xi=1": {
+      "points": 32025,
+      "failures": 0
+     },
+     "xi=2": {
+      "points": 467659,
+      "failures": 0
+     },
+     "xi=4": {
+      "points": 30575,
+      "failures": 0
+     },
+     "xi=8": {
+      "points": 29900,
+      "failures": 0
+     }
+    },
+    "seconds": 24.8,
+    "examples": []
+   },
+   "power2": {
+    "by_velocity": {
+     "xi=0": {
+      "points": 29509,
+      "failures": 0
+     },
+     "xi=1": {
+      "points": 29463,
+      "failures": 0
+     },
+     "xi=2": {
+      "points": 474122,
+      "failures": 0
+     },
+     "xi=4": {
+      "points": 28129,
+      "failures": 0
+     },
+     "xi=8": {
+      "points": 27508,
+      "failures": 0
+     }
+    },
+    "seconds": 24.2,
+    "examples": []
+   },
+   "fourparam": {
+    "by_velocity": {
+     "xi=0": {
+      "points": 29509,
+      "failures": 0
+     },
+     "xi=1": {
+      "points": 29463,
+      "failures": 0
+     },
+     "xi=2": {
+      "points": 474466,
+      "failures": 0
+     },
+     "xi=4": {
+      "points": 28129,
+      "failures": 0
+     },
+     "xi=8": {
+      "points": 27508,
+      "failures": 0
+     }
+    },
+    "seconds": 26.4,
+    "examples": []
+   }
+  },
+  "layer3_catalog": {
+   "quad": {
+    "grids_in_code": 146,
+    "grids_advertised": 146,
+    "problems": []
+   },
+   "power2": {
+    "grids_in_code": 138,
+    "grids_advertised": 138,
+    "problems": []
+   },
+   "fourparam": {
+    "grids_in_code": 139,
+    "grids_advertised": 139,
+    "problems": []
+   }
+  },
+  "layer4_refusals": {
+   "quad": {
+    "local": {
+     "missing_cell_at_velocity": {
+      "cases": 775,
+      "failures": 0
+     },
+     "same_cell_at_2": {
+      "cases": 775,
+      "failures": 0
+     },
+     "extra_cell_at_low_velocity": {
+      "cases": 450,
+      "failures": 0
+     },
+     "extra_cell_absent_at_2": {
+      "cases": 450,
+      "failures": 0
+     },
+     "half_step_at_velocity": {
+      "cases": 3300,
+      "failures": 0
+     },
+     "non_solar_node_rule": {
+      "cases": 1600,
+      "failures": 0
+     },
+     "unsupported_velocity": {
+      "cases": 100,
+      "failures": 0
+     },
+     "non_solar_at_velocity": {
+      "cases": 100,
+      "failures": 0
+     },
+     "phoenix_family_at_velocity": {
+      "cases": 84,
+      "failures": 0
+     },
+     "phoenix_family_at_2": {
+      "cases": 21,
+      "failures": 0
+     }
+    },
+    "live": {
+     "requests": 60,
+     "failures": 0,
+     "examples": []
+    },
+    "examples": []
+   },
+   "power2": {
+    "local": {
+     "missing_cell_at_velocity": {
+      "cases": 713,
+      "failures": 0
+     },
+     "same_cell_at_2": {
+      "cases": 713,
+      "failures": 0
+     },
+     "extra_cell_at_low_velocity": {
+      "cases": 414,
+      "failures": 0
+     },
+     "extra_cell_absent_at_2": {
+      "cases": 414,
+      "failures": 0
+     },
+     "half_step_at_velocity": {
+      "cases": 3036,
+      "failures": 0
+     },
+     "non_solar_node_rule": {
+      "cases": 1472,
+      "failures": 0
+     },
+     "unsupported_velocity": {
+      "cases": 92,
+      "failures": 0
+     },
+     "non_solar_at_velocity": {
+      "cases": 92,
+      "failures": 0
+     },
+     "phoenix_family_at_velocity": {
+      "cases": 92,
+      "failures": 0
+     },
+     "phoenix_family_at_2": {
+      "cases": 23,
+      "failures": 0
+     }
+    },
+    "live": {
+     "requests": 60,
+     "failures": 0,
+     "examples": []
+    },
+    "examples": []
+   },
+   "fourparam": {
+    "local": {
+     "missing_cell_at_velocity": {
+      "cases": 713,
+      "failures": 0
+     },
+     "same_cell_at_2": {
+      "cases": 713,
+      "failures": 0
+     },
+     "extra_cell_at_low_velocity": {
+      "cases": 414,
+      "failures": 0
+     },
+     "extra_cell_absent_at_2": {
+      "cases": 414,
+      "failures": 0
+     },
+     "half_step_at_velocity": {
+      "cases": 3036,
+      "failures": 0
+     },
+     "non_solar_node_rule": {
+      "cases": 1472,
+      "failures": 0
+     },
+     "unsupported_velocity": {
+      "cases": 92,
+      "failures": 0
+     },
+     "non_solar_at_velocity": {
+      "cases": 92,
+      "failures": 0
+     },
+     "phoenix_family_at_velocity": {
+      "cases": 96,
+      "failures": 0
+     },
+     "phoenix_family_at_2": {
+      "cases": 24,
+      "failures": 0
+     }
+    },
+    "live": {
+     "requests": 60,
+     "failures": 0,
+     "examples": []
+    },
+    "examples": []
+   }
+  },
+  "layer1_live": {
+   "quad": {
+    "sampled": 150,
+    "of": 467659,
+    "pass": 150,
+    "fail": 0,
+    "examples": []
+   },
+   "power2": {
+    "sampled": 150,
+    "of": 474122,
+    "pass": 150,
+    "fail": 0,
+    "examples": []
+   },
+   "fourparam": {
+    "sampled": 150,
+    "of": 474466,
+    "pass": 150,
+    "fail": 0,
+    "examples": []
+   },
+   "legacy": {
+    "edge_paths": [
+     {
+      "path": "/api/compute?teff=6000&logg=4.5&filter=V",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=PHOENIX",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=BOGUS",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=NOPE&model=ATLAS",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?logg=4.5&feh=0.0&filter=V&model=ATLAS",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=abc&logg=4.5&feh=0.0&filter=V&model=ATLAS",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=ATLAS&xi=8",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=ATLAS&xi=3",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=5150&logg=4.4&feh=-0.05&filter=TESS&model=ATLAS",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=6000&logg=4.5&feh=0.3&filter=V&model=ATLAS",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=37500&logg=4.5&feh=0.0&filter=V&model=ATLAS",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=2000&logg=4.5&feh=0.0&filter=V&model=ATLAS",
+      "identical": true
+     },
+     {
+      "path": "/api/filters",
+      "identical": true
+     },
+     {
+      "path": "/api/filters?xi=8",
+      "identical": true
+     },
+     {
+      "path": "/api/resolve?planet=NOT-A-PLANET-XYZ",
+      "identical": true
+     },
+     {
+      "path": "/api/nonexistent",
+      "identical": true
+     }
+    ],
+    "edge_identical": 16,
+    "edge_total": 16,
+    "health_stable_fields_identical": true
+   }
+  }
+ }
+}

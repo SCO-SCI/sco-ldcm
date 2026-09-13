@@ -1,0 +1,94 @@
+{
+ "quad": {
+  "sampled": 150,
+  "of": 467659,
+  "pass": 150,
+  "fail": 0,
+  "examples": []
+ },
+ "power2": {
+  "sampled": 150,
+  "of": 474122,
+  "pass": 150,
+  "fail": 0,
+  "examples": []
+ },
+ "fourparam": {
+  "sampled": 150,
+  "of": 474466,
+  "pass": 150,
+  "fail": 0,
+  "examples": []
+ },
+ "legacy": {
+  "edge_paths": [
+   {
+    "path": "/api/compute?teff=6000&logg=4.5&filter=V",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=PHOENIX",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=BOGUS",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=NOPE&model=ATLAS",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?logg=4.5&feh=0.0&filter=V&model=ATLAS",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=abc&logg=4.5&feh=0.0&filter=V&model=ATLAS",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=ATLAS&xi=8",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=ATLAS&xi=3",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=5150&logg=4.4&feh=-0.05&filter=TESS&model=ATLAS",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=6000&logg=4.5&feh=0.3&filter=V&model=ATLAS",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=37500&logg=4.5&feh=0.0&filter=V&model=ATLAS",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=2000&logg=4.5&feh=0.0&filter=V&model=ATLAS",
+    "identical": true
+   },
+   {
+    "path": "/api/filters",
+    "identical": true
+   },
+   {
+    "path": "/api/filters?xi=8",
+    "identical": true
+   },
+   {
+    "path": "/api/resolve?planet=NOT-A-PLANET-XYZ",
+    "identical": true
+   },
+   {
+    "path": "/api/nonexistent",
+    "identical": true
+   }
+  ],
+  "edge_identical": 16,
+  "edge_total": 16,
+  "health_stable_fields_identical": true
+ }
+}

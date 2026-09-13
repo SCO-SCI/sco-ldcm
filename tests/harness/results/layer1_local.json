@@ -1,0 +1,35 @@
+{
+ "quad": {
+  "points": 467659,
+  "by_kind": {
+   "node": 196111,
+   "center": 135774,
+   "random": 135774
+  },
+  "discrepancies": 0,
+  "seconds": 41.3,
+  "examples": []
+ },
+ "power2": {
+  "points": 474122,
+  "by_kind": {
+   "node": 195914,
+   "center": 139104,
+   "random": 139104
+  },
+  "discrepancies": 0,
+  "seconds": 41.2,
+  "examples": []
+ },
+ "fourparam": {
+  "points": 474466,
+  "by_kind": {
+   "node": 196054,
+   "center": 139206,
+   "random": 139206
+  },
+  "discrepancies": 0,
+  "seconds": 44.1,
+  "examples": []
+ }
+}
