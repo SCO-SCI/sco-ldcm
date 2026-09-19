@@ -104,10 +104,21 @@ _TABLES: Dict[Tuple[str, str, float, str], Grid] = {}
 
 def _add_point(table_key: Tuple[str, str, float, str],
                teff: float, logg: float, feh: float,
-               g: float, h: float) -> None:
+               g: float, h: float,
+               aux: Optional[Tuple[Optional[float], Optional[float]]] = None) -> None:
+    """Store one grid point.
+
+    ``aux`` carries the edge point (mu_cri) and Claret's own measure of how
+    closely the formula followed the simulation, where the source file
+    publishes them.  Both were discarded by the service until September 2026.
+    Phase 2 needs the edge point to rescale the intensity variable when
+    deriving Maxted's two brightness measurements.  Neither value appears in
+    any API response or on the web page.
+    """
+
 
     grid = _TABLES.setdefault(table_key, {
-        "teffs": set(), "loggs": set(), "fehs": set(), "data": {}
+        "teffs": set(), "loggs": set(), "fehs": set(), "data": {}, "aux": {}
     })
 
     t = round(float(teff), 2)
@@ -117,6 +128,8 @@ def _add_point(table_key: Tuple[str, str, float, str],
     grid["loggs"].add(gg)        # type: ignore[union-attr]
     grid["fehs"].add(z)          # type: ignore[union-attr]
     grid["data"][(t, gg, z)] = (float(g), float(h))   # type: ignore[index]
+    if aux is not None:
+        grid.setdefault("aux", {})[(t, gg, z)] = aux    # type: ignore[index]
 
 
 def _finalize_tables() -> None:
@@ -156,8 +169,11 @@ def _parse_cs22(path: str, bands: List[Tuple[str, str]]) -> int:
                 for bi, (code, source) in enumerate(bands):
                     g = float(parts[4 + bi])
                     h = float(parts[4 + nb + bi])
+                    # Third block is chi2 per band (CDS J/A+A/664/A128).
+                    # These are plane-parallel models, so no edge point.
+                    fitq = float(parts[4 + 2 * nb + bi])
                     _add_point((source, code, _norm_xi(xi), "ATLAS"),
-                               teff, logg, feh, g, h)
+                               teff, logg, feh, g, h, aux=(None, fitq))
             except ValueError:
                 continue
             count += 1
@@ -191,8 +207,12 @@ def _parse_cs23(path: str, bands: List[Tuple[str, str]]) -> int:
                 for bi, (code, source) in enumerate(bands):
                     g = float(parts[4 + bi])
                     h = float(parts[4 + nb + bi])
+                    # Third and fourth blocks are mu_cri and chi2 per band
+                    # (CDS J/A+A/674/A63).
+                    mu_cri = float(parts[4 + 2 * nb + bi])
+                    fitq   = float(parts[4 + 3 * nb + bi])
                     _add_point((source, code, xi, "PHOENIX"),
-                               teff, logg, feh, g, h)
+                               teff, logg, feh, g, h, aux=(mu_cri, fitq))
             except ValueError:
                 continue
             count += 1
@@ -231,8 +251,12 @@ def _parse_cbb_power2(path: str, source: str) -> int:
                     continue
                 if not (xi1 == xi2 == xi3):
                     continue
+                # The third value of each triple, labelled xi(CBBED) in the
+                # file header, is the fit quality (Claret, Mullen & Gary 2022,
+                # RNAAS 6, 169; confirmed by E. Mullen, a co-author). These are
+                # plane-parallel ATLAS models, so there is no edge point.
                 _add_point((source, "CBB", _norm_xi(xi1), "ATLAS"),
-                           te1, lg1, fe1, c_g, c_h)
+                           te1, lg1, fe1, c_g, c_h, aux=(None, c_x))
                 count += 1
     return count
 
@@ -243,7 +267,7 @@ def _parse_cbb_power2(path: str, source: str) -> int:
 import pickle
 
 CACHE_FILENAME = "tables.pkl"
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 
 # (filter_code, source_tag) per band, in on-file column order.
 _T = "CS22_CS23"   # both ATLAS (CS22) and PHOENIX (CS23)
@@ -520,6 +544,83 @@ def maxted_params(g: float, h: float) -> Tuple[float, float, bool]:
     h2 = g * two_pow
     valid = (h1 < 1.0) and (0.0 < h2 <= h1)
     return h1, h2, valid
+
+
+def aux_at(teff: float, logg: float, feh: float,
+           filter_code: str, model: str,
+           xi: float = DEFAULT_XI) -> Dict[str, Optional[float]]:
+    """The edge point and the fit quality for one star, interpolated.
+
+    Returns ``{"mu_cri": ..., "fit_quality": ...}``, either value being None
+    when the source file does not publish it, when the star falls outside the
+    grid, or when any corner of the surrounding cell is missing.
+
+    This is deliberately separate from compute_ldcs and is never called by the
+    API layer, so nothing it returns can reach a response.  Phase 2 will use
+    the edge point to rescale the intensity variable when deriving Maxted's
+    two brightness measurements.  It repeats the bracketing rather than
+    sharing compute_ldcs's, so that the function serving every request is left
+    untouched.
+
+    Interpolation is the same trilinear scheme used for the coefficients.  The
+    edge point moves little with temperature (about 0.0005 per 100 K) and a
+    good deal with surface gravity (0.007 to 0.11 per half step), so
+    interpolating in gravity is what matters.  Maxted notes, and measurement on
+    these tables confirms, that his brightness numbers are insensitive to the
+    precision of the edge point: a full gravity-step error costs about 0.002
+    for a dwarf.
+    """
+    none: Dict[str, Optional[float]] = {"mu_cri": None, "fit_quality": None}
+    try:
+        key = _resolve_table_key(filter_code, model, xi)
+    except (ValueError, KeyError):
+        return none
+    grid = _TABLES.get(key)
+    if grid is None:
+        return none
+    aux = grid.get("aux") or {}
+    if not aux:
+        return none
+
+    teffs: List[float] = grid["teffs"]    # type: ignore[assignment]
+    loggs: List[float] = grid["loggs"]    # type: ignore[assignment]
+    fehs:  List[float] = grid["fehs"]     # type: ignore[assignment]
+    try:
+        i0, i1, tT = _bracket(teffs, float(teff))
+        j0, j1, tG = _bracket(loggs, float(logg))
+        if len(fehs) == 1:
+            k0, k1, tZ = 0, 0, 0.0
+        else:
+            k0, k1, tZ = _bracket(fehs, float(feh))
+    except (ValueError, TypeError):
+        return none
+
+    teff_vals = (teffs[i0], teffs[i1])
+    logg_vals = (loggs[j0], loggs[j1])
+    feh_vals  = (fehs[k0],  fehs[k1])
+    w = [[[(1.0 - tT) * (1.0 - tG) * (1.0 - tZ), (1.0 - tT) * (1.0 - tG) * tZ],
+          [(1.0 - tT) * tG * (1.0 - tZ),         (1.0 - tT) * tG * tZ]],
+         [[tT * (1.0 - tG) * (1.0 - tZ),         tT * (1.0 - tG) * tZ],
+          [tT * tG * (1.0 - tZ),                 tT * tG * tZ]]]
+
+    out: Dict[str, Optional[float]] = {}
+    for slot, name in ((0, "mu_cri"), (1, "fit_quality")):
+        total = 0.0
+        ok = True
+        for i, te in enumerate(teff_vals):
+            for j, lg in enumerate(logg_vals):
+                for k, fe in enumerate(feh_vals):
+                    cell = aux.get((round(te, 2), round(lg, 3), round(fe, 3)))
+                    if cell is None or cell[slot] is None:
+                        ok = False
+                        break
+                    total += w[i][j][k] * float(cell[slot])
+                if not ok:
+                    break
+            if not ok:
+                break
+        out[name] = total if ok else None
+    return out
 
 
 def compute_ldcs(teff: float, logg: float, feh: float,

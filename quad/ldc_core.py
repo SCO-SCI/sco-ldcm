@@ -93,10 +93,26 @@ _TABLES: Dict[Tuple[str, str, float, str], Grid] = {}
 
 def _add_point(table_key: Tuple[str, str, float, str],
                teff: float, logg: float, feh: float,
-               u1: float, u2: float) -> None:
-   
+               u1: float, u2: float,
+               aux: Optional[Tuple[Optional[float], Optional[float]]] = None) -> None:
+    """Store one grid point.
+
+    ``aux`` carries two extra quantities that some of Claret's files publish
+    alongside the coefficients and that the service kept discarding until
+    September 2026:
+
+      * the edge point (mu_cri) for the spherically symmetric models, which is
+        where his fit stops and the star is treated as dark beyond it.  Phase 2
+        needs it to rescale the intensity variable when deriving Maxted's two
+        brightness measurements; without the rescaling those come out wrong by
+        0.005 to 0.054 depending on the star (Maxted 2023, section 4.3.1).
+      * his own measure of how closely the formula followed the simulation.
+
+    Files that publish neither pass ``None``.  Neither value appears in any
+    API response or on the web page; both are held for internal use only.
+    """
     grid = _TABLES.setdefault(table_key, {
-        "teffs": set(), "loggs": set(), "fehs": set(), "data": {}
+        "teffs": set(), "loggs": set(), "fehs": set(), "data": {}, "aux": {}
     })
     
     t = round(float(teff), 2)
@@ -106,6 +122,8 @@ def _add_point(table_key: Tuple[str, str, float, str],
     grid["loggs"].add(g)         # type: ignore[union-attr]
     grid["fehs"].add(z)          # type: ignore[union-attr]
     grid["data"][(t, g, z)] = (float(u1), float(u2))   # type: ignore[index]
+    if aux is not None:
+        grid.setdefault("aux", {})[(t, g, z)] = aux    # type: ignore[index]
 
 
 def _finalize_tables() -> None:
@@ -169,11 +187,22 @@ def _parse_table5(path: str) -> int:
                 u2   = float(line[32:40])
             except ValueError:
                 continue
+            # Bytes 42-49 hold mu_cri and bytes 51-58 the fit quality, given in
+            # the file as the square root of chi squared (CDS J/A+A/618/A20).
+            try:
+                mu_cri = float(line[41:49])
+            except (ValueError, IndexError):
+                mu_cri = None
+            try:
+                fitq = float(line[50:58])
+            except (ValueError, IndexError):
+                fitq = None
             
             # Bytes 19-22 of this file hold the mixing-length parameter, not
             # velocity (see CDS J/A+A/618/A20). The models were computed at
             # 2.0 km/s, so the grid is filed there and nowhere else.
-            _add_point(("C2018", "TESS", DEFAULT_XI, "PHOENIX"), teff, logg, feh, u1, u2)
+            _add_point(("C2018", "TESS", DEFAULT_XI, "PHOENIX"), teff, logg, feh, u1, u2,
+                       aux=(mu_cri, fitq))
             count += 1
     return count
 
@@ -214,7 +243,12 @@ def _parse_cbbquadratic(path: str) -> int:
                 if not (ve1 == ve2 == ve3):
                     
                     continue
-                _add_point(("CMG2022", "CBB", _norm_xi(ve1), "ATLAS"), te1, lg1, fe1, c_a, c_b)
+                # The third value of each triple is the fit quality
+                # (Claret, Mullen & Gary 2022, RNAAS 6, 169; confirmed by
+                # E. Mullen, a co-author). These are plane-parallel ATLAS
+                # models, so there is no edge point.
+                _add_point(("CMG2022", "CBB", _norm_xi(ve1), "ATLAS"), te1, lg1, fe1, c_a, c_b,
+                           aux=(None, c_x))
                 count += 1
     return count
 
@@ -239,19 +273,28 @@ def _parse_c2021(path: str, model: str) -> int:
                     u1   = float(parts[4])
                     u2   = float(parts[5])
                     xi   = _norm_xi(vel)
+                    # This is a plane-parallel grid, so there is no edge point;
+                    # field 7 is chi2 (CDS J/other/RNAAS/5.13, table8.dat).
+                    mu_cri = None
+                    fitq   = float(parts[6])
                 else:  # PHOENIX-COND
                     logg = float(parts[0])
                     teff = float(parts[1])
                     feh  = float(parts[2])
                     u1   = float(parts[3])
                     u2   = float(parts[4])
+                    # Fields 6 and 7 are mu_cri and chi2
+                    # (CDS J/other/RNAAS/5.13, table2.dat).
+                    mu_cri = float(parts[5])
+                    fitq   = float(parts[6])
                     # This file has no velocity column at all (CDS
                     # J/other/RNAAS/5.13). Its models are 2.0 km/s.
                     xi   = DEFAULT_XI
             except ValueError:
                 continue
 
-            _add_point(("C2021", "CHEOPS", xi, model), teff, logg, feh, u1, u2)
+            _add_point(("C2021", "CHEOPS", xi, model), teff, logg, feh, u1, u2,
+                       aux=(mu_cri, fitq))
             count += 1
     return count
 
@@ -261,7 +304,7 @@ def _parse_c2021(path: str, model: str) -> int:
 import pickle
 
 CACHE_FILENAME = "tables.pkl"
-CACHE_VERSION = 4        
+CACHE_VERSION = 5        
 SOURCE_FILES = ("tableab.dat", "table5.dat", "CBBQUADRATIC.txt",
                 "table2.dat", "table8.dat")
 
@@ -534,6 +577,83 @@ def _filter_has_model(filter_code: str, storage_model: str) -> bool:
         if f["code"] == filter_code:
             return storage_model in EXPECTED_MODELS.get(f["source"], [])
     return False
+
+
+def aux_at(teff: float, logg: float, feh: float,
+           filter_code: str, model: str,
+           xi: float = DEFAULT_XI) -> Dict[str, Optional[float]]:
+    """The edge point and the fit quality for one star, interpolated.
+
+    Returns ``{"mu_cri": ..., "fit_quality": ...}``, either value being None
+    when the source file does not publish it, when the star falls outside the
+    grid, or when any corner of the surrounding cell is missing.
+
+    This is deliberately separate from compute_ldcs and is never called by the
+    API layer, so nothing it returns can reach a response.  Phase 2 will use
+    the edge point to rescale the intensity variable when deriving Maxted's
+    two brightness measurements.  It repeats the bracketing rather than
+    sharing compute_ldcs's, so that the function serving every request is left
+    untouched.
+
+    Interpolation is the same trilinear scheme used for the coefficients.  The
+    edge point moves little with temperature (about 0.0005 per 100 K) and a
+    good deal with surface gravity (0.007 to 0.11 per half step), so
+    interpolating in gravity is what matters.  Maxted notes, and measurement on
+    these tables confirms, that his brightness numbers are insensitive to the
+    precision of the edge point: a full gravity-step error costs about 0.002
+    for a dwarf.
+    """
+    none: Dict[str, Optional[float]] = {"mu_cri": None, "fit_quality": None}
+    try:
+        key = _resolve_table_key(filter_code, model, xi)
+    except (ValueError, KeyError):
+        return none
+    grid = _TABLES.get(key)
+    if grid is None:
+        return none
+    aux = grid.get("aux") or {}
+    if not aux:
+        return none
+
+    teffs: List[float] = grid["teffs"]    # type: ignore[assignment]
+    loggs: List[float] = grid["loggs"]    # type: ignore[assignment]
+    fehs:  List[float] = grid["fehs"]     # type: ignore[assignment]
+    try:
+        i0, i1, tT = _bracket(teffs, float(teff))
+        j0, j1, tG = _bracket(loggs, float(logg))
+        if len(fehs) == 1:
+            k0, k1, tZ = 0, 0, 0.0
+        else:
+            k0, k1, tZ = _bracket(fehs, float(feh))
+    except (ValueError, TypeError):
+        return none
+
+    teff_vals = (teffs[i0], teffs[i1])
+    logg_vals = (loggs[j0], loggs[j1])
+    feh_vals  = (fehs[k0],  fehs[k1])
+    w = [[[(1.0 - tT) * (1.0 - tG) * (1.0 - tZ), (1.0 - tT) * (1.0 - tG) * tZ],
+          [(1.0 - tT) * tG * (1.0 - tZ),         (1.0 - tT) * tG * tZ]],
+         [[tT * (1.0 - tG) * (1.0 - tZ),         tT * (1.0 - tG) * tZ],
+          [tT * tG * (1.0 - tZ),                 tT * tG * tZ]]]
+
+    out: Dict[str, Optional[float]] = {}
+    for slot, name in ((0, "mu_cri"), (1, "fit_quality")):
+        total = 0.0
+        ok = True
+        for i, te in enumerate(teff_vals):
+            for j, lg in enumerate(logg_vals):
+                for k, fe in enumerate(feh_vals):
+                    cell = aux.get((round(te, 2), round(lg, 3), round(fe, 3)))
+                    if cell is None or cell[slot] is None:
+                        ok = False
+                        break
+                    total += w[i][j][k] * float(cell[slot])
+                if not ok:
+                    break
+            if not ok:
+                break
+        out[name] = total if ok else None
+    return out
 
 
 def compute_ldcs(teff: float, logg: float, feh: float,
