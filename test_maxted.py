@@ -207,9 +207,9 @@ if client is not None:
          'd.h1_prime' in html and 'd.h2_prime' in html)
     page("the panel is not restricted to power-2",
          "currentLaw === 'power2' && d && d.h1" not in html)
-    page("the edge-point row exists",
-         'id="m_mucri"' in html and '<td>Edge point</td>' in html)
-    page("the edge point sits below Source and above the equation",
+    page("the mu_cri row exists, labelled with the published symbol",
+         'id="m_mucri"' in html and '<em>&mu;</em><sub>cri</sub>' in html)
+    page("mu_cri sits below Source and above the equation",
          html.index('id="m_source"') < html.index('id="m_mucri"') < html.index('id="lawEquation"'))
     page("the realizability flag is nowhere in the page",
          'realizable' not in html)

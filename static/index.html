@@ -367,8 +367,11 @@
           <tr><td>Source</td><td id="m_source">—</td></tr>
           <!-- Shown so that a user can reproduce the Maxted values above from
                the coefficients: for the spherically symmetric tables the two
-               measurement positions are shifted inward using this value. -->
-          <tr><td>Edge point</td><td id="m_mucri">—</td></tr>
+               measurement positions are shifted inward using this value.
+               Labelled with Claret's own symbol rather than a plain-English
+               name, because that is what the papers, the CDS catalogues and
+               the table column headings all use. -->
+          <tr><td><em>&mu;</em><sub>cri</sub></td><td id="m_mucri">—</td></tr>
         </tbody>
       </table>
       <p class="law-eq mb-0" id="lawEquation">
@@ -1567,9 +1570,9 @@ function showResult(d) {
   $('m_model').textContent  = d.model;
   $('m_method').textContent = (d.grid && d.grid.on_grid) ? 'Direct table value (on grid)' : 'Trilinear interpolation';
   $('m_source').textContent = d.citation || '—';
-  // Plane-parallel tables publish no edge point, and none is applied.
+  // Plane-parallel tables publish no mu_cri, and no correction is applied.
   $('m_mucri').textContent = (d.mu_cri == null)
-        ? 'Not applicable (plane-parallel model)'
+        ? 'Not published (plane-parallel model)'
         : `${d.mu_cri} (applied)`;
   $('copyBtn').hidden = false;
 }
