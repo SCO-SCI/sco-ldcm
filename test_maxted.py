@@ -12,9 +12,12 @@ Maxted's own published worked example is deliberately NOT used: it appears to
 combine model values from the TESS band with corrections from the Kepler band,
 so a correct implementation would fail it.
 """
-import sys, math, logging, importlib
+import os, sys, math, logging, importlib
 logging.disable(logging.CRITICAL)
-sys.path.insert(0, '/home/claude/work')
+
+# Run from wherever the repository sits, on any platform.
+ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, ROOT)
 
 fails = []
 def check(label, got, want, tol=1e-9):
@@ -25,7 +28,7 @@ def check(label, got, want, tol=1e-9):
 
 ENG = {law: importlib.import_module(f"{law}.ldc_core") for law in ('quad','power2','fourparam')}
 for law, m in ENG.items():
-    m.load_tables(f'/home/claude/work/{law}/data', use_cache=False)
+    m.load_tables(os.path.join(ROOT, law, 'data'), use_cache=False)
 
 def direct(law, r, mu):
     """Evaluate the law itself at one position -- the independent route."""
