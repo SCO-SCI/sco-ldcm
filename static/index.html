@@ -1535,11 +1535,15 @@ function fmt(x) {
 
 function renderDerived(d) {
   const panel = $('derivedPanel');
-  const hdr   = $('tabPanelHdr');
+  // NOTE: do not touch #tabPanelHdr here.  Despite the name it belongs to the
+  // COEFFICIENT panel above -- it is the "Claret & Southworth" source label --
+  // and is managed by applyLaw().  The 2018 version of this function toggled
+  // it, which was wrong and made that label appear whenever derived values
+  // were present.
+  //
   // Shown for every law.  The values are computed from whichever law the user
   // selected, so they always describe the coefficients displayed beside them.
   const show = (d && d.h1_prime != null && d.h2_prime != null);
-  if (hdr)   hdr.style.display   = show ? '' : 'none';
   if (panel) panel.style.display = show ? '' : 'none';
   if (!show) return;
   $('d1').textContent = fmt(d.h1_prime);
@@ -1550,9 +1554,7 @@ function renderDerived(d) {
 
 function clearDerived() {
   const panel = $('derivedPanel');
-  const hdr   = $('tabPanelHdr');
   if (panel) panel.style.display = 'none';
-  if (hdr)   hdr.style.display   = 'none';
   ['d1','d2'].forEach(id => {
     const e = $(id);
     if (e) { e.textContent = '—'; e.classList.add('placeholder-dash'); }

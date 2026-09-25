@@ -213,6 +213,25 @@ if client is not None:
          html.index('id="m_source"') < html.index('id="m_mucri"') < html.index('id="lawEquation"'))
     page("the realizability flag is nowhere in the page",
          'realizable' not in html)
+    # The derived panel must not touch #tabPanelHdr -- that element belongs to
+    # the coefficient panel above and is managed by applyLaw().
+    rd = html[html.index('function renderDerived'):html.index('function clearDerived')]
+    # Look for the element being fetched, not merely named: the comment in
+    # that function mentions it precisely to warn against touching it.
+    page("the derived panel does not touch the coefficient panel's header",
+         "$('tabPanelHdr')" not in rd and '$("tabPanelHdr")' not in rd)
+
+    # Browsers must be told to revalidate.  Without this a deploy can stay
+    # invisible for hours: observed 25 Sept 2026, when a hard reload did not
+    # clear it and only a changed query string forced a fresh fetch.
+    r = client.get("/")
+    cc = r.headers.get("cache-control")
+    page(f"the page is served with Cache-Control: no-cache (got {cc!r})",
+         cc == "no-cache")
+    et = r.headers.get("etag")
+    page("and revalidation still returns 'not modified', so it stays cheap",
+         et is not None
+         and client.get("/", headers={"If-None-Match": et}).status_code == 304)
 
 print("\n" + ("ALL CHECKS PASS" if not fails else f"{len(fails)} FAILURES:"))
 for f in fails: print("   ", f)

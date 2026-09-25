@@ -176,9 +176,35 @@ app.add_api_route("/api/filters", _legacy_filters, methods=["GET"])
 app.add_api_route("/api/compute", _legacy_compute, methods=["GET"])
 app.add_api_route("/api/resolve", _quad_resolve, methods=["GET"])
 
+# ---------------------------------------------------------------------------
+# Static files, with an explicit instruction to revalidate.
+#
+# Without a Cache-Control header a browser is left to invent its own freshness
+# lifetime, and may serve a stored copy of the page without asking the server
+# whether anything has changed.  That produced a real fault on 25 September
+# 2026: after a deploy the page kept showing the previous version, a hard
+# reload did not help, and it corrected itself hours later when the browser's
+# guessed lifetime expired.  Only a changed query string forced a fresh fetch.
+#
+# "no-cache" does not forbid caching.  It tells the browser to check with the
+# server before reusing what it holds.  Because these responses already carry
+# an ETag, that check is cheap: unchanged files come back as a short "not
+# modified" reply and the browser reuses its copy.  The effect is that a deploy
+# becomes visible immediately, to everyone, every time.
+# ---------------------------------------------------------------------------
+
+class _RevalidatingStatic(StaticFiles):
+    """StaticFiles that asks browsers to revalidate rather than guess."""
+
+    def file_response(self, *args, **kwargs):          # type: ignore[override]
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
 if os.path.isdir(STATIC_DIR) and os.path.exists(os.path.join(STATIC_DIR, "index.html")):
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static_legacy")
-    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static") 
+    app.mount("/static", _RevalidatingStatic(directory=STATIC_DIR), name="static_legacy")
+    app.mount("/", _RevalidatingStatic(directory=STATIC_DIR, html=True), name="static") 
     
 else:
     @app.get("/")
