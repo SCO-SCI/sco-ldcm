@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.DS_Store
+v5_verify_*.py
+v5_step*_verify.py
+
+# Pre-digested copies of the coefficient tables.  These are build artefacts:
+# they are derived entirely from the raw text files beside them and are rebuilt
+# automatically, in about three seconds, on a host's first start.
+#
+# They were previously committed to speed cold starts, but they go stale
+# whenever a cache version is bumped -- as happened on 23 September 2026 when
+# the edge point and fit quality were added -- and a stale cache is silently
+# ignored, so the repository ends up carrying 52 MB of files the service does
+# not use.  Keeping them out means there is nothing to remember to regenerate.
+*.pkl
