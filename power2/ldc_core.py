@@ -586,8 +586,16 @@ def _filter_has_model(filter_code: str, storage_model: str) -> bool:
 # every table shows this happens for about 0.5 per cent of grid points, all of
 # them the four-parameter law on the Stroemgren b and v filters at extremes of
 # temperature, gravity or composition.  It is a property of the published
-# tables, not of this arithmetic, so the values are returned as computed and
-# the caller is told they fall outside the region.
+# tables, not of this arithmetic.
+#
+# The service returns the values as computed and does NOT flag this to the
+# caller (decision, E. Mullen, 24 Sept 2026).  The reasoning: SCO-LDC's job is
+# to report the published tables faithfully, not to interpret them.  Its users
+# are professional astronomers, and a star that brightens toward its limb is
+# something they will recognise at once.  Maxted's parameterisation does not
+# introduce the problem -- it is already present in the coefficients -- it
+# merely makes it visible.  The flag below is therefore computed and kept for
+# internal use, so the condition is available should a future case call for it.
 # Specification: "How to Calculate Maxted Values", SCO-LDC v5, 24 Sept 2026.
 # ---------------------------------------------------------------------------
 
@@ -835,6 +843,12 @@ def compute_ldcs(teff: float, logg: float, feh: float,
 
     
 
+    # The edge point comes from the same table that supplied the coefficients,
+    # so it is looked up with the same arguments.  It is None for the
+    # plane-parallel tables, which is exactly what maxted_values expects.
+    _mc = aux_at(teff, logg, feh, filter_code, model, xi)["mu_cri"]
+    _mx = maxted_values(g_coef, h_coef, _mc)
+
     return {
         "g": g_coef,
         "h": h_coef,
@@ -843,6 +857,28 @@ def compute_ldcs(teff: float, logg: float, feh: float,
         "filter_name": next(f["name"] for f in FILTER_REGISTRY if f["code"] == filter_code),
         "model": _display_model(filter_code, storage_model),
         "citation": SOURCE_CITATIONS[source],
+        # Maxted's two brightness measurements, derived from the coefficients
+        # immediately above.  Present on this route only; the legacy unprefixed
+        # route strips them -- see parent_app.LEGACY_WITHHELD.
+        #
+        # Rounded to six decimals.  Most of the published tables give four, so a
+        # coefficient's last digit is uncertain by up to 0.00005; propagated
+        # through the arithmetic that leaves the fifth decimal of h1' and h2'
+        # already uncertain (about 0.000018 and 0.000024).  Six decimals is
+        # comfortably finer than that and discards nothing real, while the
+        # seventh digit onward is floating-point remainder rather than
+        # information about the star.  For scale, Maxted measures these to
+        # about 0.005 on a real star.
+        #
+        # The coefficients themselves are deliberately NOT rounded: the frozen
+        # unprefixed route has always returned them at full precision, artefacts
+        # and all, and its payload must not change.  Rounding them only on this
+        # route would make the same star come back with different precision
+        # depending on the address, which helps nobody.
+        "h1_prime": round(_mx["h1_prime"], 6),
+        "h2_prime": round(_mx["h2_prime"], 6),
+        "edge_point_applied": _mx["edge_point_applied"],
+        "mu_cri": (None if _mx["mu_cri"] is None else round(_mx["mu_cri"], 6)),
         "grid": {
             "teff_bracket": [teff_vals[0], teff_vals[1]],
             "logg_bracket": [logg_vals[0], logg_vals[1]],

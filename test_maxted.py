@@ -116,5 +116,79 @@ if g2['edge_point_applied']: fails.append('flag true on plane-parallel')
 alt = ENG['quad'].maxted_values(r['u1'], r['u2'], 0.0)
 check("k = 1 gives the uncorrected answer exactly", alt['h1_prime'], g2['h1_prime'], 1e-15)
 
+print("\nCHECK 5 -- the values reach the right routes and no others\n")
+try:
+    from fastapi.testclient import TestClient
+    import parent_app
+    client = TestClient(parent_app.app)
+except Exception as exc:                      # pragma: no cover
+    print(f"  [SKIP] could not start the application: {exc}")
+    client = None
+
+NEW_FIELDS = ("h1_prime", "h2_prime", "edge_point_applied", "mu_cri")
+
+if client is not None:
+    # present on the three prefixed routes
+    for law in ("quad", "power2", "fourparam"):
+        r = client.get(f"/{law}/api/compute?teff=5600&logg=4.5&feh=0.0"
+                       f"&filter=TESS&model=PHOENIX-COND")
+        have = r.status_code == 200 and all(k in r.json() for k in NEW_FIELDS)
+        print(f"  [{'PASS' if have else 'FAIL'}] /{law}/api/compute carries all four fields")
+        if not have: fails.append(f"{law} route missing fields")
+
+    # absent from the frozen unprefixed route
+    r = client.get("/api/compute?teff=5600&logg=4.5&feh=0.0"
+                   "&filter=TESS&model=PHOENIX-COND")
+    clean = r.status_code == 200 and not any(k in r.json() for k in NEW_FIELDS)
+    print(f"  [{'PASS' if clean else 'FAIL'}] /api/compute (frozen) carries none of them")
+    if not clean: fails.append("frozen route leaked a field")
+
+    # the realizability flag is internal and must not be served anywhere
+    leaked = []
+    for p_ in ("/quad/api/compute?teff=5600&logg=4.5&feh=0.0&filter=TESS&model=PHOENIX-COND",
+               "/fourparam/api/compute?teff=3500&logg=1.0&feh=-2.0&filter=v&model=ATLAS",
+               "/api/compute?teff=5600&logg=4.5&feh=0.0&filter=TESS&model=PHOENIX-COND"):
+        if "realizable" in client.get(p_).text:
+            leaked.append(p_)
+    print(f"  [{'PASS' if not leaked else 'FAIL'}] the realizability flag is not served anywhere")
+    if leaked: fails.append(f"realizable leaked at {leaked}")
+
+    # the route's values must equal the function's, to the precision served
+    r = client.get("/quad/api/compute?teff=5600&logg=4.5&feh=0.0"
+                   "&filter=TESS&model=PHOENIX-COND").json()
+    m  = ENG["quad"]
+    ref = m.maxted_values(r["u1"], r["u2"],
+                          m.aux_at(5600., 4.5, 0.0, "TESS", "PHOENIX-COND")["mu_cri"])
+    check("the route's h1' matches the function's", r["h1_prime"], ref["h1_prime"], 5e-7)
+    check("the route's h2' matches the function's", r["h2_prime"], ref["h2_prime"], 5e-7)
+
+    # the served values carry six decimals and no more
+    over = []
+    for law in ("quad", "power2", "fourparam"):
+        for q in ("teff=5650&logg=4.2&feh=0.0&filter=TESS&model=PHOENIX-COND",
+                  "teff=5137&logg=4.43&feh=-0.07&filter=V&model=ATLAS"):
+            d = client.get(f"/{law}/api/compute?{q}")
+            if d.status_code != 200:
+                continue
+            d = d.json()
+            for k in ("h1_prime", "h2_prime", "mu_cri"):
+                v = d.get(k)
+                if v is None:
+                    continue
+                if round(v, 6) != v:
+                    over.append(f"{law} {k}={v!r}")
+    print(f"  [{'PASS' if not over else 'FAIL'}] the served values carry no more than six decimals")
+    if over:
+        fails.append(f"over-precise: {over[:3]}")
+
+    # the coefficients must NOT have been rounded -- the frozen payload depends on it
+    d = client.get("/api/compute?teff=5137&logg=4.43&feh=-0.07"
+                   "&filter=V&model=ATLAS").json()
+    intact = repr(d["u1"]) == "0.6075814935999999"
+    print(f"  [{'PASS' if intact else 'FAIL'}] the frozen route's coefficients are untouched "
+          f"({d['u1']!r})")
+    if not intact:
+        fails.append("a coefficient was rounded on the frozen route")
+
 print("\n" + ("ALL CHECKS PASS" if not fails else f"{len(fails)} FAILURES:"))
 for f in fails: print("   ", f)

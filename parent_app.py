@@ -133,6 +133,14 @@ def _legacy_filters() -> dict:
     return _quad_filters(xi=_quad_ldc_core.DEFAULT_XI)
 
 
+# Fields that the newer prefixed routes carry but the four original, frozen
+# routes must not.  Anything added to a compute response from now on belongs
+# here unless it has been decided that the legacy consumers should see it.
+# AstroImageJ and the TFOP tooling read the unprefixed route; its payload is
+# frozen.
+LEGACY_WITHHELD = ("xi", "h1_prime", "h2_prime", "edge_point_applied", "mu_cri")
+
+
 def _legacy_compute(
     teff: float = Query(..., description="Effective temperature in K"),
     logg: float = Query(..., description="Surface gravity log g in cgs dex"),
@@ -142,7 +150,8 @@ def _legacy_compute(
 ) -> dict:
     result = _quad_compute(teff=teff, logg=logg, feh=feh, filter=filter,
                            model=model, xi=_quad_ldc_core.DEFAULT_XI)
-    result.pop("xi", None)
+    for key in LEGACY_WITHHELD:
+        result.pop(key, None)
     return result
 
 
