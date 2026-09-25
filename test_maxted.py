@@ -190,5 +190,29 @@ if client is not None:
     if not intact:
         fails.append("a coefficient was rounded on the frozen route")
 
+print("\nCHECK 6 -- the web page\n")
+if client is not None:
+    html = client.get("/").text
+    def page(label, cond):
+        print(f"  [{'PASS' if cond else 'FAIL'}] {label}")
+        if not cond: fails.append(f"page: {label}")
+    page("the derived panel is present and live",
+         'id="derivedPanel"' in html and 'Maxted (2023)' in html)
+    page("the labels carry the prime mark",
+         '<sub>1</sub>&prime;' in html and '<sub>2</sub>&prime;' in html)
+    page("no trace of the withdrawn 2018 panel",
+         'Maxted (2018)' not in html and 'maxtedWarn' not in html
+         and 'maxted_valid' not in html)
+    page("the renderer reads h1_prime and h2_prime",
+         'd.h1_prime' in html and 'd.h2_prime' in html)
+    page("the panel is not restricted to power-2",
+         "currentLaw === 'power2' && d && d.h1" not in html)
+    page("the edge-point row exists",
+         'id="m_mucri"' in html and '<td>Edge point</td>' in html)
+    page("the edge point sits below Source and above the equation",
+         html.index('id="m_source"') < html.index('id="m_mucri"') < html.index('id="lawEquation"'))
+    page("the realizability flag is nowhere in the page",
+         'realizable' not in html)
+
 print("\n" + ("ALL CHECKS PASS" if not fails else f"{len(fails)} FAILURES:"))
 for f in fails: print("   ", f)

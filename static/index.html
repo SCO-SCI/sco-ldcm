@@ -180,15 +180,6 @@
     letter-spacing: 0.05em;
     margin-bottom: 0.35rem;
   }
-  .maxted-warn {
-    font-size: 0.7rem;
-    color: #8a6d3b;
-    background: #fcf8e3;
-    border-left: 3px solid #d9c07a;
-    padding: 0.3rem 0.5rem;
-    margin-top: 0.5rem;
-    border-radius: 2px;
-  }
   .compute-success {
     color: #001f5b !important;   /* same navy as the informational note in #status */
     font-size: 0.72rem;
@@ -341,35 +332,32 @@
       </div>
 
       <!-- ==================================================================
-           Maxted (2018) h1/h2 display — TEMPORARILY HIDDEN FROM THE UI.
+           Maxted's two brightness measurements (Maxted 2023, MNRAS 519, 3723).
 
-           SUPERSEDED.  The 2018 definitions measured brightness at mu = 1/2
-           and at the extreme limb; Maxted replaced them in 2023 because a
-           transit carries almost no information about the limb.  The old
-           backend function has been removed.  This markup is retained as the
-           basis for the 2023 panel (h1-prime, h2-prime) built in Phase 2.1c.
+           h1-prime is the star's brightness about three-quarters of the way
+           out from the centre of its disc; h2-prime is how much dimmer it has
+           become by about ninety-four per cent of the way out.  Both are
+           derived from the coefficients shown above, under whichever law the
+           user selected, so they are internally consistent with them.
 
-           TO RESTORE: un-comment this block, and re-enable the `show`
-           flag in renderDerived() and the h1/h2 clipboard text in the
-           copy handler (both marked with "MAXTED DISPLAY DISABLED").
-           ==================================================================
+           This replaces the 2018 h1/h2 panel.  Those definitions measured
+           brightness at mu = 1/2 and at the extreme limb, and Maxted withdrew
+           them in 2023 because a transit carries almost no information about
+           the limb.
+           ================================================================== -->
       <div id="derivedPanel" class="coef-panel coef-panel-derived" style="display:none;">
-        <div class="coef-panel-hdr">Maxted (2018)</div>
+        <div class="coef-panel-hdr">Maxted (2023)</div>
         <div class="d-flex gap-4">
           <div>
-            <div class="result-label"><em>h</em><sub>1</sub></div>
-            <div class="result-value placeholder-dash" id="d1">—</div>
+            <div class="result-label"><em>h</em><sub>1</sub>&prime;</div>
+            <div class="result-value placeholder-dash" id="d1">&mdash;</div>
           </div>
           <div>
-            <div class="result-label"><em>h</em><sub>2</sub></div>
-            <div class="result-value placeholder-dash" id="d2">—</div>
+            <div class="result-label"><em>h</em><sub>2</sub>&prime;</div>
+            <div class="result-value placeholder-dash" id="d2">&mdash;</div>
           </div>
         </div>
-        <div id="maxtedWarn" class="maxted-warn" style="display:none;">
-          Outside the realizable region (<em>h</em><sub>1</sub> &lt; 1, 0 &lt; <em>h</em><sub>2</sub> &le; <em>h</em><sub>1</sub>; Short et al. 2019).
-        </div>
       </div>
-      -->
 
       <table class="table table-sm mb-2">
         <tbody id="metaTable">
@@ -377,6 +365,10 @@
           <tr><td>Model</td><td id="m_model">—</td></tr>
           <tr><td>Method</td><td id="m_method">—</td></tr>
           <tr><td>Source</td><td id="m_source">—</td></tr>
+          <!-- Shown so that a user can reproduce the Maxted values above from
+               the coefficients: for the spherically symmetric tables the two
+               measurement positions are shifted inward using this value. -->
+          <tr><td>Edge point</td><td id="m_mucri">—</td></tr>
         </tbody>
       </table>
       <p class="law-eq mb-0" id="lawEquation">
@@ -1541,32 +1533,23 @@ function fmt(x) {
 function renderDerived(d) {
   const panel = $('derivedPanel');
   const hdr   = $('tabPanelHdr');
-  const warn  = $('maxtedWarn');
-  // MAXTED DISPLAY DISABLED — see the commented-out #derivedPanel markup above.
-  // The backend still returns h1, h2 and maxted_valid; we simply do not render
-  // them. Setting `show` to false keeps this function (and its callers) intact
-  // and makes the panel, its header, and the warning stay hidden.
-  //
-  // TO RESTORE: replace the line below with the original guard --
-  //   const show = (currentLaw === 'power2' && d && d.h1 != null && d.h2 != null);
-  const show = false;
+  // Shown for every law.  The values are computed from whichever law the user
+  // selected, so they always describe the coefficients displayed beside them.
+  const show = (d && d.h1_prime != null && d.h2_prime != null);
   if (hdr)   hdr.style.display   = show ? '' : 'none';
   if (panel) panel.style.display = show ? '' : 'none';
   if (!show) return;
-  $('d1').textContent = fmt(d.h1);
+  $('d1').textContent = fmt(d.h1_prime);
   $('d1').classList.remove('placeholder-dash');
-  $('d2').textContent = fmt(d.h2);
+  $('d2').textContent = fmt(d.h2_prime);
   $('d2').classList.remove('placeholder-dash');
-  if (warn) warn.style.display = (d.maxted_valid === false) ? '' : 'none';
 }
 
 function clearDerived() {
   const panel = $('derivedPanel');
   const hdr   = $('tabPanelHdr');
-  const warn  = $('maxtedWarn');
   if (panel) panel.style.display = 'none';
   if (hdr)   hdr.style.display   = 'none';
-  if (warn)  warn.style.display  = 'none';
   ['d1','d2'].forEach(id => {
     const e = $(id);
     if (e) { e.textContent = '—'; e.classList.add('placeholder-dash'); }
@@ -1584,6 +1567,10 @@ function showResult(d) {
   $('m_model').textContent  = d.model;
   $('m_method').textContent = (d.grid && d.grid.on_grid) ? 'Direct table value (on grid)' : 'Trilinear interpolation';
   $('m_source').textContent = d.citation || '—';
+  // Plane-parallel tables publish no edge point, and none is applied.
+  $('m_mucri').textContent = (d.mu_cri == null)
+        ? 'Not applicable (plane-parallel model)'
+        : `${d.mu_cri} (applied)`;
   $('copyBtn').hidden = false;
 }
 
@@ -1593,7 +1580,7 @@ function clearResult() {
     $(c.id).classList.add('placeholder-dash');
   });
   clearDerived();
-  ['m_filter','m_model','m_method','m_source'].forEach(id => $(id).textContent = '—');
+  ['m_filter','m_model','m_method','m_source','m_mucri'].forEach(id => $(id).textContent = '—');
   $('copyBtn').hidden = true;
 }
 
@@ -1620,12 +1607,9 @@ $('copyBtn').addEventListener('click', async () => {
   if (currentLaw === 'power2') {
     // Power-2 coefficients are labelled because g and h are not interchangeable.
     //
-    // MAXTED DISPLAY DISABLED — the h1/h2 values are no longer shown in the UI,
-    // so they are not appended to the copied text either.
-    // TO RESTORE: re-add the two lines below and the append that followed --
-    //   const d1v = $('d1').textContent.trim();
-    //   const d2v = $('d2').textContent.trim();
-    //   if (d1v !== '—' && d2v !== '—') text += ` h1=${d1v} h2=${d2v}`;
+    // The Maxted values are displayed beside the coefficients but are NOT
+    // appended to the copied text.  What gets copied is what a user pastes
+    // into a fitting tool, and those tools take the native coefficients.
     text = `g=${values[0]} h=${values[1]}`;
   } else {
     text = values.join('   ');
