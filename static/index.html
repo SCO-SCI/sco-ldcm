@@ -343,10 +343,11 @@
       <!-- ==================================================================
            Maxted (2018) h1/h2 display — TEMPORARILY HIDDEN FROM THE UI.
 
-           The backend still computes and returns h1, h2 and maxted_valid
-           (see power2/ldc_core.py :: maxted_params); only the presentation
-           is suppressed here, pending further study of the power-2 /
-           Maxted reparameterization before public release.
+           SUPERSEDED.  The 2018 definitions measured brightness at mu = 1/2
+           and at the extreme limb; Maxted replaced them in 2023 because a
+           transit carries almost no information about the limb.  The old
+           backend function has been removed.  This markup is retained as the
+           basis for the 2023 panel (h1-prime, h2-prime) built in Phase 2.1c.
 
            TO RESTORE: un-comment this block, and re-enable the `show`
            flag in renderDerived() and the h1/h2 clipboard text in the

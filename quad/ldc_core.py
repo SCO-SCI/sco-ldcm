@@ -579,6 +579,96 @@ def _filter_has_model(filter_code: str, storage_model: str) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+# Maxted's two brightness measurements  (Maxted 2023, MNRAS 519, 3723)
+# ---------------------------------------------------------------------------
+# Rather than quoting the coefficients inside a limb-darkening law, Maxted
+# describes a star by two brightnesses at fixed places on its visible disc:
+#
+#     h1' = I(2/3)              about 75 per cent of the way out from centre
+#     h2' = h1' - I(1/3)        the further drop by about 94 per cent out
+#
+# A transit light curve measures these two well and the raw coefficients
+# poorly, so essentially all recent research states its results in them.
+#
+# THE EDGE-POINT CORRECTION.  Tables built from spherically symmetric model
+# atmospheres are fitted only as far out as a sharp brightness cliff near the
+# limb, so their mu scale is stretched relative to the real star.  Before the
+# law is evaluated the two positions must be moved inward.  Maxted 2023
+# section 4.3.1 states that the coefficients in those tables "cannot be used
+# directly".  Writing k = 1 - mu_cri, the two positions become
+#
+#     mu1' = 1 - k/3            and       mu2' = 1 - 2k/3
+#
+# which reduce to exactly 2/3 and 1/3 when k = 1, i.e. when no edge point is
+# supplied.  The code therefore takes k = 1 for the plane-parallel tables and
+# needs no separate branch for the arithmetic.
+#
+# WHEN TO CORRECT.  The test is whether the table supplied an edge point for
+# this star, NOT the model's name.  Today the only model label carrying one is
+# PHOENIX-COND, but the JWST tables arriving in Phase 3 are also spherical,
+# publish their own edge point, and carry a different name.  Testing the name
+# would silently skip the correction for them and return values wrong by
+# between 0.005 and 0.054.
+#
+# Skipping the correction where it is needed costs 0.005 to 0.054 depending on
+# the star, against a measurement precision of about 0.005 and a model-versus-
+# reality gap of about 0.006.  Getting it wrong is therefore larger than the
+# effect these numbers exist to measure, and nothing about the wrong answer
+# looks wrong.
+#
+#
+# REALIZABILITY.  A published coefficient set can describe a profile no real
+# star could have.  Short et al. (2019) give the condition for Maxted's pair:
+#
+#     h1' < 1    and    0 < h2' <= h1'
+#
+# h1' >= 1 would mean the star is brighter three-quarters of the way out than
+# at its centre; h2' <= 0 would mean it brightens toward the limb.  Sweeping
+# every table shows this happens for about 0.5 per cent of grid points, all of
+# them the four-parameter law on the Stroemgren b and v filters at extremes of
+# temperature, gravity or composition.  It is a property of the published
+# tables, not of this arithmetic, so the values are returned as computed and
+# the caller is told they fall outside the region.
+# Specification: "How to Calculate Maxted Values", SCO-LDC v5, 24 Sept 2026.
+# ---------------------------------------------------------------------------
+
+def _maxted_positions(mu_cri: Optional[float]) -> Tuple[float, float, float]:
+    """The two positions at which to evaluate the law, and the factor k.
+
+    Returns (mu1, mu2, k).  With no edge point, k = 1 and the positions are
+    exactly 2/3 and 1/3.
+    """
+    k = 1.0 - (mu_cri if mu_cri is not None else 0.0)
+    return 1.0 - k / 3.0, 1.0 - 2.0 * k / 3.0, k
+
+def _realizable(h1: float, h2: float) -> bool:
+    """Whether the pair describes a profile a real star could have.
+
+    Short et al. (2019), correcting the range given in Maxted (2018).
+    """
+    return (h1 < 1.0) and (0.0 < h2 <= h1)
+
+
+def maxted_values(u1: float, u2: float,
+                  mu_cri: Optional[float] = None) -> Dict[str, object]:
+    """Maxted's h1' and h2' from a pair of quadratic coefficients.
+
+    For the quadratic law the correction folds into the coefficients, because
+    the law depends only on (1 - mu) and the shift turns that into k(1 - mu).
+    That is peculiar to this law; the other two must shift the positions.
+    """
+    mu1, mu2, k = _maxted_positions(mu_cri)
+    a1 = k * u1
+    a2 = k * k * u2
+    h1 = 1.0 - a1 / 3.0 - a2 / 9.0
+    h2 = (a1 + a2) / 3.0
+    return {"h1_prime": h1, "h2_prime": h2,
+            "edge_point_applied": mu_cri is not None,
+            "mu_cri": mu_cri,
+            "realizable": _realizable(h1, h2)}
+
+
 def aux_at(teff: float, logg: float, feh: float,
            filter_code: str, model: str,
            xi: float = DEFAULT_XI) -> Dict[str, Optional[float]]:
