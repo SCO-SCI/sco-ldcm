@@ -215,10 +215,11 @@
     <a href="#capabilities"><span class="n">6</span>GET capabilities</a>
     <a href="#resolve"><span class="n">7</span>GET /api/resolve</a>
     <a href="#compute"><span class="n">8</span>GET /api/compute</a>
-    <a href="#errors"><span class="n">9</span>Error responses</a>
-    <a href="#impl"><span class="n">10</span>Implementation notes</a>
-    <a href="#examples"><span class="n">11</span>Example calls</a>
-    <a href="#code"><span class="n">12</span>Code</a>
+    <a href="#maxted"><span class="n">9</span>Maxted&rsquo;s two measurements</a>
+    <a href="#errors"><span class="n">10</span>Error responses</a>
+    <a href="#impl"><span class="n">11</span>Implementation notes</a>
+    <a href="#examples"><span class="n">12</span>Example calls</a>
+    <a href="#code"><span class="n">13</span>Code</a>
   </nav>
 
   <hr>
@@ -681,6 +682,10 @@
   <span class="c-key">"filter_name"</span>: <span class="c-str">"SDSS i'"</span>,
   <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>,
   <span class="c-key">"citation"</span>: <span class="c-str">"Claret &amp; Bloemen (2011, A&amp;A 529, A75)"</span>,
+  <span class="c-key">"h1_prime"</span>: <span class="c-num">0.784219</span>,
+  <span class="c-key">"h2_prime"</span>: <span class="c-num">0.222733</span>,
+  <span class="c-key">"edge_point_applied"</span>: <span class="c-bool">false</span>,
+  <span class="c-key">"mu_cri"</span>: <span class="c-bool">null</span>,
   <span class="c-key">"grid"</span>: {
     <span class="c-key">"teff_bracket"</span>: [<span class="c-num">5000.0</span>, <span class="c-num">5250.0</span>],
     <span class="c-key">"logg_bracket"</span>: [<span class="c-num">4.0</span>, <span class="c-num">4.5</span>],
@@ -722,6 +727,10 @@
         <tr><td><code>filter_name</code></td><td><span class="type">string</span></td><td>Human-readable filter name</td></tr>
         <tr><td><code>model</code></td><td><span class="type">string</span></td><td>The model used (echoes/canonicalizes the input)</td></tr>
         <tr><td><code>citation</code></td><td><span class="type">string</span></td><td>Source citation for the underlying Claret table</td></tr>
+        <tr><td><code>h1_prime</code></td><td><span class="type">number</span></td><td>Maxted&rsquo;s h<sub>1</sub>&prime;: the star&rsquo;s brightness at &mu; = 2/3, about three-quarters of the way out from the centre of the disc. Derived from the coefficients above, under the law of this endpoint. Rounded to six decimals. See &sect;9</td></tr>
+        <tr><td><code>h2_prime</code></td><td><span class="type">number</span></td><td>Maxted&rsquo;s h<sub>2</sub>&prime;: how much further the star dims by &mu; = 1/3, about ninety-four per cent of the way out. This is a difference in brightness, not a brightness. Rounded to six decimals</td></tr>
+        <tr><td><code>edge_point_applied</code></td><td><span class="type">boolean</span></td><td>true when the table publishes &mu;<sub>cri</sub> for this star and the rescaling was applied before deriving the two values above; false for plane-parallel tables</td></tr>
+        <tr><td><code>mu_cri</code></td><td><span class="type">number | null</span></td><td>The published edge point for this star, interpolated as the coefficients are. Reported so that the two values above can be reproduced. null when the table publishes none</td></tr>
         <tr><td><code>grid.teff_bracket</code></td><td><span class="type">[num, num]</span></td><td>The two grid T<sub>eff</sub> values bracketing the input</td></tr>
         <tr><td><code>grid.logg_bracket</code></td><td><span class="type">[num, num]</span></td><td>Same for logg</td></tr>
         <tr><td><code>grid.feh_bracket</code></td><td><span class="type">[num, num]</span></td><td>Same for [Fe/H]</td></tr>
@@ -741,6 +750,10 @@
   <span class="c-key">"filter_name"</span>: <span class="c-str">"Johnson V"</span>,
   <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>,
   <span class="c-key">"citation"</span>: <span class="c-str">"Claret &amp; Southworth (2022, A&amp;A 664, A128)"</span>,
+  <span class="c-key">"h1_prime"</span>: <span class="c-num">0.807853</span>,
+  <span class="c-key">"h2_prime"</span>: <span class="c-num">0.225880</span>,
+  <span class="c-key">"edge_point_applied"</span>: <span class="c-bool">false</span>,
+  <span class="c-key">"mu_cri"</span>: <span class="c-bool">null</span>,
   <span class="c-key">"grid"</span>: { <span class="c-str">&hellip; same structure as the quadratic response &hellip;</span> },
   <span class="c-key">"xi"</span>: <span class="c-num">2.0</span>
 }</pre>
@@ -756,7 +769,11 @@
       <tbody>
         <tr><td><code>g</code></td><td><span class="type">number</span></td><td>Tabulated power-2 linear coefficient, interpolated from the Claret &amp; Southworth tables</td></tr>
         <tr><td><code>h</code></td><td><span class="type">number</span></td><td>Tabulated power-2 exponent, interpolated from the Claret &amp; Southworth tables</td></tr>
-      </tbody>
+              <tr><td><code>h1_prime</code></td><td><span class="type">number</span></td><td>Maxted&rsquo;s h<sub>1</sub>&prime;: the star&rsquo;s brightness at &mu; = 2/3, about three-quarters of the way out from the centre of the disc. Derived from the coefficients above, under the law of this endpoint. Rounded to six decimals. See &sect;9</td></tr>
+        <tr><td><code>h2_prime</code></td><td><span class="type">number</span></td><td>Maxted&rsquo;s h<sub>2</sub>&prime;: how much further the star dims by &mu; = 1/3, about ninety-four per cent of the way out. This is a difference in brightness, not a brightness. Rounded to six decimals</td></tr>
+        <tr><td><code>edge_point_applied</code></td><td><span class="type">boolean</span></td><td>true when the table publishes &mu;<sub>cri</sub> for this star and the rescaling was applied before deriving the two values above; false for plane-parallel tables</td></tr>
+        <tr><td><code>mu_cri</code></td><td><span class="type">number | null</span></td><td>The published edge point for this star, interpolated as the coefficients are. Reported so that the two values above can be reproduced. null when the table publishes none</td></tr>
+</tbody>
     </table>
 
     <h3>Four-parameter response on success (HTTP 200) &mdash; <code>/fourparam/api/compute</code></h3>
@@ -769,6 +786,10 @@
   <span class="c-key">"filter_name"</span>: <span class="c-str">"Johnson V"</span>,
   <span class="c-key">"model"</span>: <span class="c-str">"ATLAS"</span>,
   <span class="c-key">"citation"</span>: <span class="c-str">"Claret &amp; Bloemen (2011, A&amp;A 529, A75)"</span>,
+  <span class="c-key">"h1_prime"</span>: <span class="c-num">0.811663</span>,
+  <span class="c-key">"h2_prime"</span>: <span class="c-num">0.230499</span>,
+  <span class="c-key">"edge_point_applied"</span>: <span class="c-bool">false</span>,
+  <span class="c-key">"mu_cri"</span>: <span class="c-bool">null</span>,
   <span class="c-key">"grid"</span>: { <span class="c-str">&hellip; same structure as the quadratic response &hellip;</span> },
   <span class="c-key">"xi"</span>: <span class="c-num">2.0</span>
 }</pre>
@@ -786,7 +807,11 @@
         <tr><td><code>a2</code></td><td><span class="type">number</span></td><td>Second four-parameter coefficient (term in 1&minus;&mu;)</td></tr>
         <tr><td><code>a3</code></td><td><span class="type">number</span></td><td>Third four-parameter coefficient (term in 1&minus;&mu;<sup>3/2</sup>)</td></tr>
         <tr><td><code>a4</code></td><td><span class="type">number</span></td><td>Fourth four-parameter coefficient (term in 1&minus;&mu;<sup>2</sup>)</td></tr>
-      </tbody>
+              <tr><td><code>h1_prime</code></td><td><span class="type">number</span></td><td>Maxted&rsquo;s h<sub>1</sub>&prime;: the star&rsquo;s brightness at &mu; = 2/3, about three-quarters of the way out from the centre of the disc. Derived from the coefficients above, under the law of this endpoint. Rounded to six decimals. See &sect;9</td></tr>
+        <tr><td><code>h2_prime</code></td><td><span class="type">number</span></td><td>Maxted&rsquo;s h<sub>2</sub>&prime;: how much further the star dims by &mu; = 1/3, about ninety-four per cent of the way out. This is a difference in brightness, not a brightness. Rounded to six decimals</td></tr>
+        <tr><td><code>edge_point_applied</code></td><td><span class="type">boolean</span></td><td>true when the table publishes &mu;<sub>cri</sub> for this star and the rescaling was applied before deriving the two values above; false for plane-parallel tables</td></tr>
+        <tr><td><code>mu_cri</code></td><td><span class="type">number | null</span></td><td>The published edge point for this star, interpolated as the coefficients are. Reported so that the two values above can be reproduced. null when the table publishes none</td></tr>
+</tbody>
     </table>
 
     <h3>Citation strings by source</h3>
@@ -875,7 +900,111 @@
 
   <!-- 8. ERRORS -->
   <section id="errors" class="doc-sec">
-    <h2><span class="sec-num">9</span>Error responses</h2>
+
+    <h2 id="maxted"><span class="sec-num">9</span>Maxted&rsquo;s two brightness measurements</h2>
+
+    <p class="mb-2">Every answer from the three prefixed paths carries two further numbers,
+    <code>h1_prime</code> and <code>h2_prime</code>. They describe the star by its actual brightness at
+    two fixed places on the visible disc rather than by the constants inside a formula:</p>
+
+    <ul class="notes">
+      <li><strong>h<sub>1</sub>&prime; = I(2/3)</strong> &mdash; the brightness about three-quarters of the
+      way out from the centre of the disc, as a fraction of the brightness at the centre.</li>
+      <li><strong>h<sub>2</sub>&prime; = h<sub>1</sub>&prime; &minus; I(1/3)</strong> &mdash; how much further
+      the star dims by about ninety-four per cent of the way out. Note that this is a
+      <em>difference</em> in brightness, not a brightness.</li>
+    </ul>
+
+    <p class="mb-2">A transit light curve measures these two quantities well and the raw coefficients
+    poorly, which is why most recent research states its results in them
+    (Maxted 2023, MNRAS 519, 3723).</p>
+
+    <h3>Where these numbers come from</h3>
+    <p class="mb-2">The coefficients this service returns are Claret&rsquo;s published values, obtained by
+    simulating a star&rsquo;s outer layers, calculating how bright the disc appears from centre to edge, and
+    finding the constants that make a chosen formula follow that pattern as closely as possible. The
+    fitting method is least squares. That is a choice rather than a measurement: the same simulated star
+    fitted by a different but equally defensible criterion gives different numbers, and different groups
+    tabulating the same simulations have been found to disagree by up to 20 per cent.</p>
+
+    <p class="mb-2">For the spherically symmetric simulations there is a further point. Those produce a
+    sharp brightness cliff very close to the edge of the disc that no simple formula can follow. Claret
+    fits his formula only as far out as that cliff, at &mu;<sub>cri</sub>, and defines the star as dark
+    beyond it. Both halves are the product: the coefficients and that instruction.</p>
+
+    <h3>How to reproduce these values</h3>
+    <p class="mb-2">For the spherically symmetric tables the two measurement positions are moved inward
+    before the formula is evaluated, following Maxted (2023) section 4.3.1, who states that the
+    coefficients in those tables &ldquo;cannot be used directly&rdquo;. Writing
+    <em>k</em> = 1 &minus; &mu;<sub>cri</sub>, the positions become 1 &minus; <em>k</em>/3 and
+    1 &minus; 2<em>k</em>/3, which reduce to exactly 2/3 and 1/3 when no edge point is published.</p>
+
+    <p class="mb-2">This matters: computing the two values from our coefficients <em>without</em> the
+    rescaling gives an answer different from ours by between 0.005 and 0.054, depending on the star,
+    against a typical measurement precision of about 0.005. The service therefore reports
+    <code>mu_cri</code> alongside the values, and <code>edge_point_applied</code> to say whether the
+    rescaling was performed, so that the arithmetic can be checked rather than taken on trust.</p>
+
+    <h3>How far these predictions sit from real measurements</h3>
+    <p class="mb-2">Predicted limb darkening does not exactly match what transit light curves measure.
+    Patel &amp; Espinoza (2022, AJ 163, 228) fitted 176 known planets observed by TESS, letting the data
+    rather than a table determine the limb darkening. For Sun-like stars they found the predictions
+    offset by about 0.10 in the first quadratic coefficient and 0.13 in the second; below about 5000 K the
+    disagreement reached about 0.2, and no model or method they tried came closer.</p>
+
+    <p class="mb-2">Three scopes belong with those numbers: they were measured on Claret&rsquo;s 2017 tables,
+    which this service does not hold; they are for the quadratic law; and they are in the TESS band. They
+    indicate the size of the problem rather than a correction for these values.</p>
+
+    <p class="mb-2">Part of the disagreement is now physically understood. Kostogryz et al. (2024) showed
+    that small magnetic fields on a star&rsquo;s surface brighten the edge of its disc by roughly the
+    observed amount, and no published simulation includes them. The effect is strongest for stars hotter
+    than the Sun, weaker for cooler orange dwarfs, and essentially absent for red dwarfs.</p>
+
+    <h3>Whether to fix the limb darkening in your fit</h3>
+    <p class="mb-2">When fitting a transit you can fix the limb darkening to tabulated values or let your
+    software determine it from the data. Both introduce error, and which is worse depends on your data.</p>
+
+    <p class="mb-2">Espinoza &amp; Jord&aacute;n (2015, MNRAS 450, 1879) tested this on noiseless simulated
+    light curves. With an accurate table, fixing the coefficients biases the measured planet radius by
+    about 0.05 per cent for a central transit and floating them by about 0.2 per cent; for off-centre
+    transits both rise to around 1 per cent. But if the table is wrong by a realistic amount, fixing
+    biases the planet radius by up to 3 per cent, the orbital distance by about 10 per cent and the
+    orbital tilt by about 5 per cent, worst for small planets around cool stars.</p>
+
+    <p class="mb-2">Their recommendation is to let the coefficients float when using the quadratic law.
+    Two conditions travel with it and are often dropped: for a planet crossing centrally with a table you
+    trust, fixing is the better choice; and if your measurement uncertainty already exceeds these biases,
+    floating merely widens your error bars without improving accuracy. For ground-based photometry at a
+    few millimagnitudes that is usually the case.</p>
+
+    <p class="mb-2">Maxted (2023) recommends a third approach over both: let the values vary, but constrain
+    them with a prior built from the tabulated value plus his measured correction. Serving that recipe
+    directly is planned but not yet implemented.</p>
+
+    <h3>A temperature trend in the TESS quadratic table</h3>
+    <p class="mb-2">The quadratic coefficients returned for the TESS band come from Claret (2018), computed
+    from spherically symmetric PHOENIX-COND simulations. Maxted (2023) compared nine published tabulations
+    against 43 real systems; most show a small constant offset and no dependence on stellar temperature.
+    This one is an exception. For stars hotter than about 5500 K he measured the offset growing with
+    temperature as</p>
+
+    <pre class="code">&Delta;h<sub>1</sub>&prime; = (0.0095 &plusmn; 0.0019) + (0.015 &plusmn; 0.005) &times; Y,
+        where Y = (T<sub>eff</sub> &minus; 6000 K) / 1000 K</pre>
+
+    <p class="mb-2">so the disagreement is about 0.010 at 6000 K and about 0.024 at 7000 K. He describes the
+    corresponding trend in h<sub>2</sub>&prime; as only marginally significant. No other tabulation he tested
+    shows a significant temperature trend except the MARCS tables of Morello et al. (2022). This is a
+    property of the published table, not of this service&rsquo;s interpolation of it.</p>
+
+    <h3>Availability</h3>
+    <p class="mb-2">These four fields appear on <code>/quad/api/compute</code>,
+    <code>/power2/api/compute</code> and <code>/fourparam/api/compute</code> only. The unprefixed
+    <code>/api/compute</code> omits them, because its payload is frozen for existing consumers
+    (see &sect;2). Callers wanting them from a quadratic request should use
+    <code>/quad/api/compute</code>, which returns the identical coefficients from the identical tables.</p>
+
+    <h2><span class="sec-num">10</span>Error responses</h2>
     <p class="mb-2">A summary of every error case the API can return:</p>
     <table class="api">
       <thead><tr><th>Scenario</th><th style="width:16%;">HTTP status</th><th>Body shape</th></tr></thead>
@@ -912,7 +1041,7 @@
 
   <!-- 9. IMPLEMENTATION NOTES -->
   <section id="impl" class="doc-sec">
-    <h2><span class="sec-num">10</span>Implementation notes</h2>
+    <h2><span class="sec-num">11</span>Implementation notes</h2>
 
     <h3>Caching</h3>
     <p class="mb-2">Both the NEA planet table and the ExoFOP TOI table are cached in-memory on the server and refreshed once daily
@@ -954,7 +1083,7 @@
 
   <!-- 10. EXAMPLES -->
   <section id="examples" class="doc-sec">
-    <h2><span class="sec-num">11</span>Example calls</h2>
+    <h2><span class="sec-num">12</span>Example calls</h2>
 
     <h3>Health check</h3>
     <pre class="code">GET https://sco-ldc.com/api/health
@@ -1015,7 +1144,7 @@
 
   <!-- 11. CODE -->
   <section id="code" class="doc-sec">
-    <h2><span class="sec-num">12</span>Code</h2>
+    <h2><span class="sec-num">13</span>Code</h2>
     <p class="mb-2">Source code repository:
       <a href="https://github.com/SCO-SCI/sco-ldc" target="_blank" rel="noopener">https://github.com/SCO-SCI/sco-ldcm</a>
     </p>

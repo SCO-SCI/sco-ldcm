@@ -213,6 +213,30 @@ if client is not None:
          html.index('id="m_source"') < html.index('id="m_mucri"') < html.index('id="lawEquation"'))
     page("the realizability flag is nowhere in the page",
          'realizable' not in html)
+
+    ref = client.get("/static/sco_ldc_api_reference.html").text
+    page("the reference documents the four new fields",
+         all(k in ref for k in ('h1_prime','h2_prime','edge_point_applied','mu_cri')))
+    page("the reference states the rescaling requirement",
+         'cannot be used directly' in ref)
+    page("the reference says the frozen route omits them",
+         'payload is frozen' in ref)
+    # Removed deliberately on 26 September 2026: astronomers choosing the
+    # quadratic law already know its limitations, and restating them is not
+    # this service's job.  The values are identical information to the
+    # coefficients beside them, exactly reversible, so there is nothing to
+    # disclose about our own arithmetic.
+    page("no quadratic caveat on the page or in the reference",
+         'maxtedQuadNote' not in html and 'A caution about values' not in ref)
+    import re as _re
+    _toc = _re.findall(r'<a href="#([^"]+)"><span class="n">(\d+)</span>', ref)
+    _hdr = _re.findall(r'<span class="sec-num">(\d+)</span>', ref)
+    page("the reference's contents and section numbering agree",
+         [int(t[1]) for t in _toc] == [int(h) for h in _hdr]
+         and [int(h) for h in _hdr] == list(range(1, len(_hdr) + 1)))
+    _ids = set(_re.findall(r'id="([^"]+)"', ref))
+    page("every contents link in the reference resolves",
+         all(t[0] in _ids for t in _toc))
     # The derived panel must not touch #tabPanelHdr -- that element belongs to
     # the coefficient panel above and is managed by applyLaw().
     rd = html[html.index('function renderDerived'):html.index('function clearDerived')]
