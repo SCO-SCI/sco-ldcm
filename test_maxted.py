@@ -190,7 +190,62 @@ if client is not None:
     if not intact:
         fails.append("a coefficient was rounded on the frozen route")
 
-print("\nCHECK 6 -- the web page\n")
+print("\nCHECK 6 -- Maxted's empirical correction\n")
+if client is not None:
+    def corr(law, q):
+        r = client.get(f"/{law}/api/compute?{q}")
+        return r.json().get("maxted_correction") if r.status_code == 200 else None
+
+    # present exactly where he measured, absent everywhere else
+    HAVE = [("quad", "teff=5600&logg=4.5&feh=0.0&filter=TESS&model=PHOENIX-COND",
+             "Claret (2018) PHOENIX-COND", 0.011, -0.002),
+            ("quad", "teff=6000&logg=4.0&feh=0.0&filter=Kp&model=ATLAS",
+             "Claret & Bloemen (2011) ATLAS", 0.006, -0.013),
+            ("fourparam", "teff=6000&logg=4.0&feh=0.0&filter=Kp&model=ATLAS",
+             "Claret & Bloemen (2011) ATLAS", 0.006, -0.013)]
+    for law, q, table, d1, d2 in HAVE:
+        c_ = corr(law, q)
+        good = c_ is not None and c_["table"] == table \
+               and abs(c_["offset_h1_prime"] - d1) < 1e-12 \
+               and abs(c_["offset_h2_prime"] - d2) < 1e-12
+        print(f"  [{'PASS' if good else 'FAIL'}] {law:10} {table[:34]:34} correction served")
+        if not good: fails.append(f"correction missing or wrong for {law} {q[:30]}")
+        if c_:
+            # the corrected value must be the table value plus the offset
+            base = client.get(f"/{law}/api/compute?{q}").json()
+            check(f"  {law:10} corrected h1' = table + offset",
+                  c_["h1_prime"], round(base["h1_prime"] + d1, 6), 5e-7)
+
+    NONE = [("power2", "teff=5600&logg=4.5&feh=0.0&filter=TESS&model=PHOENIX-COND",
+             "power-2 TESS is Claret & Southworth 2023, which he did not test"),
+            ("fourparam", "teff=5600&logg=4.5&feh=0.0&filter=TESS&model=PHOENIX-COND",
+             "four-parameter TESS likewise"),
+            ("power2", "teff=6000&logg=4.0&feh=0.0&filter=Kp&model=ATLAS",
+             "power-2 Kepler is Claret & Southworth 2022"),
+            ("quad", "teff=5750&logg=4.5&feh=0.0&filter=V&model=ATLAS",
+             "he never observed in Johnson V"),
+            ("quad", "teff=6000&logg=4.0&feh=0.0&filter=Kp&model=ATLAS&xi=8",
+             "a non-default microturbulent velocity")]
+    for law, q, why in NONE:
+        absent = corr(law, q) is None
+        print(f"  [{'PASS' if absent else 'FAIL'}] absent: {why}")
+        if not absent: fails.append(f"correction wrongly served: {why}")
+
+    # absent means absent, not null -- a caller should be able to test for the key
+    d_ = client.get("/quad/api/compute?teff=5750&logg=4.5&feh=0.0"
+                    "&filter=V&model=ATLAS").json()
+    print(f"  [{'PASS' if 'maxted_correction' not in d_ else 'FAIL'}] "
+          f"the key is omitted rather than set to null")
+    if 'maxted_correction' in d_: fails.append("correction key present as null")
+
+    # and never on the frozen route
+    d_ = client.get("/api/compute?teff=5600&logg=4.5&feh=0.0"
+                    "&filter=TESS&model=PHOENIX-COND").json()
+    print(f"  [{'PASS' if 'maxted_correction' not in d_ else 'FAIL'}] "
+          f"never on the frozen unprefixed route")
+    if 'maxted_correction' in d_: fails.append("correction leaked to the frozen route")
+
+print("\nCHECK 7 -- the web page\n")
 if client is not None:
     html = client.get("/").text
     def page(label, cond):
@@ -221,6 +276,15 @@ if client is not None:
          'cannot be used directly' in ref)
     page("the reference says the frozen route omits them",
          'payload is frozen' in ref)
+    page("the page has a row for the empirical correction, hidden by default",
+         'id="m_corr_row"' in html and 'Maxted empirical correction' in html)
+    page("the page hides that row when no correction exists",
+         "mcRow.style.display = 'none'" in html)
+    page("the reference documents the correction object",
+         "Maxted&rsquo;s empirical correction" in ref
+         and 'maxted_correction' in ref and 'n_systems' in ref)
+    page("the reference explains why it is not applied to the values",
+         'Durability' in ref and 'cannot be done for the four-parameter law' in ref)
     # Removed deliberately on 26 September 2026: astronomers choosing the
     # quadratic law already know its limitations, and restating them is not
     # this service's job.  The values are identical information to the

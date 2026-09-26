@@ -480,6 +480,9 @@ def _filter_has_model(filter_code: str, storage_model: str) -> bool:
 # Specification: "How to Calculate Maxted Values", SCO-LDC v5, 24 Sept 2026.
 # ---------------------------------------------------------------------------
 
+from shared import maxted_correction as _mxc
+
+
 def _maxted_positions(mu_cri: Optional[float]) -> Tuple[float, float, float]:
     """The two positions at which to evaluate the law, and the factor k.
 
@@ -726,6 +729,8 @@ def compute_ldcs(teff: float, logg: float, feh: float,
     # plane-parallel tables, which is exactly what maxted_values expects.
     _mc = aux_at(teff, logg, feh, filter_code, model, xi)["mu_cri"]
     _mx = maxted_values(a1, a2, a3, a4, _mc)
+    _mxcorr = _mxc.correction(source, filter_code, model,
+                              _mx["h1_prime"], _mx["h2_prime"], xi)
 
     return {
         "a1": a1,
@@ -758,6 +763,10 @@ def compute_ldcs(teff: float, logg: float, feh: float,
         "h2_prime": round(_mx["h2_prime"], 6),
         "edge_point_applied": _mx["edge_point_applied"],
         "mu_cri": (None if _mx["mu_cri"] is None else round(_mx["mu_cri"], 6)),
+        # Maxted's empirically measured correction for THIS table, present only
+        # where he measured one.  Shown beside the table values, never folded
+        # into them -- see shared/maxted_correction.py for the reasoning.
+        **({"maxted_correction": _mxcorr} if _mxcorr else {}),
         "grid": {
             "teff_bracket": [teff_vals[0], teff_vals[1]],
             "logg_bracket": [logg_vals[0], logg_vals[1]],

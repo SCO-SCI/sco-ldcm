@@ -138,7 +138,8 @@ def _legacy_filters() -> dict:
 # here unless it has been decided that the legacy consumers should see it.
 # AstroImageJ and the TFOP tooling read the unprefixed route; its payload is
 # frozen.
-LEGACY_WITHHELD = ("xi", "h1_prime", "h2_prime", "edge_point_applied", "mu_cri")
+LEGACY_WITHHELD = ("xi", "h1_prime", "h2_prime", "edge_point_applied",
+                   "mu_cri", "maxted_correction")
 
 
 def _legacy_compute(

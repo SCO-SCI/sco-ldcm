@@ -997,10 +997,68 @@
     shows a significant temperature trend except the MARCS tables of Morello et al. (2022). This is a
     property of the published table, not of this service&rsquo;s interpolation of it.</p>
 
+    <h3>Maxted&rsquo;s empirical correction</h3>
+    <p class="mb-2">Everything above is arithmetic on published tables. This is not: it is a
+    measurement of how far a particular table sits from real stars. Maxted (2023) took 43 systems
+    observed by Kepler and TESS, determined their actual limb darkening from the light curves, and
+    compared the result against nine published tabulations, recording for each an offset, its
+    uncertainty, and how much individual stars scattered around it.</p>
+
+    <p class="mb-2">Where the table behind a request is one he tested, the response carries a
+    <code>maxted_correction</code> object and the page shows a line beneath &mu;<sub>cri</sub>. Two
+    tabulations qualify, covering three law-and-filter combinations:</p>
+
+    <table class="api">
+      <thead><tr><th style="width:22%;">Band</th><th style="width:36%;">Table</th><th>Laws</th></tr></thead>
+      <tbody>
+        <tr><td>Kepler</td><td>Claret &amp; Bloemen (2011) ATLAS</td><td>quadratic, four-parameter</td></tr>
+        <tr><td>TESS</td><td>Claret (2018) PHOENIX-COND</td><td>quadratic</td></tr>
+      </tbody>
+    </table>
+
+    <p class="mb-2">Everywhere else the object is <strong>absent</strong> &mdash; not null &mdash; because
+    no such measurement exists for that table. A correction measured on one table must not be applied to
+    values from another: different tables give different values for the same star, so borrowing one would
+    introduce an error of the same order as the correction itself. It is also applied only at the default
+    microturbulent velocity, since the other variants carry a different offset from reality and Maxted
+    published nothing about them.</p>
+
+    <h4 style="font-size:0.95rem;margin-top:1rem;">Why it is shown beside the values rather than applied to them</h4>
+    <ul class="notes">
+      <li><strong>Durability.</strong> This is one team&rsquo;s measurement of 43 stars. Kostogryz et al.
+      already publish tables that model the same physics directly, and better constraints will follow.
+      Applying the correction to what the service returns would make every such paper a maintenance
+      obligation and would silently change answers users had already recorded.</li>
+      <li><strong>Size.</strong> The correction is barely larger than its own uncertainty: across the four
+      quantities the ratios are 1.2, 0.3, 1.1 and 1.0. Serving a shifted central value alone would present
+      a barely significant result as a fact and discard the width &mdash; and the width is the point.
+      Maxted&rsquo;s recommendation is not &ldquo;add 0.006&rdquo; but &ldquo;use a prior of
+      0.880 &plusmn; 0.006&rdquo;.</li>
+      <li><strong>It cannot be done for the four-parameter law.</strong> The correction is to
+      h<sub>1</sub>&prime; and h<sub>2</sub>&prime;, two numbers, and that law has four coefficients. Two
+      equations cannot determine four unknowns: coefficient sets as different as
+      (0.413, 0.481, &minus;0.150, &minus;0.019) and (&minus;2.172, 2.204, 1.172, &minus;1.284) give
+      identical h<sub>1</sub>&prime; and h<sub>2</sub>&prime;. There is no single corrected set to serve.</li>
+    </ul>
+
+    <h4 style="font-size:0.95rem;margin-top:1rem;">Object fields</h4>
+    <table class="api">
+      <thead><tr><th style="width:28%;">Field</th><th style="width:12%;">Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>h1_prime</code>, <code>h2_prime</code></td><td><span class="type">number</span></td><td>The corrected values: the table value plus the measured offset</td></tr>
+        <tr><td><code>h1_prime_err</code>, <code>h2_prime_err</code></td><td><span class="type">number</span></td><td>The width to attach to them, combining the uncertainty on the offset with the scatter of real stars about it, added in quadrature. This is how Maxted builds the prior he recommends</td></tr>
+        <tr><td><code>offset_h1_prime</code>, <code>offset_h2_prime</code></td><td><span class="type">number</span></td><td>The offsets themselves, so the arithmetic is visible</td></tr>
+        <tr><td><code>table</code>, <code>band</code></td><td><span class="type">string</span></td><td>Which tabulation and passband the measurement applies to</td></tr>
+        <tr><td><code>n_systems</code></td><td><span class="type">integer</span></td><td>How many systems the offset was measured from</td></tr>
+        <tr><td><code>source</code></td><td><span class="type">string</span></td><td>Citation for the measurement</td></tr>
+      </tbody>
+    </table>
+
     <h3>Availability</h3>
     <p class="mb-2">These four fields appear on <code>/quad/api/compute</code>,
-    <code>/power2/api/compute</code> and <code>/fourparam/api/compute</code> only. The unprefixed
-    <code>/api/compute</code> omits them, because its payload is frozen for existing consumers
+    <code>/power2/api/compute</code> and <code>/fourparam/api/compute</code> only, as does
+    <code>maxted_correction</code> where it exists. The unprefixed
+    <code>/api/compute</code> omits them all, because its payload is frozen for existing consumers
     (see &sect;2). Callers wanting them from a quadratic request should use
     <code>/quad/api/compute</code>, which returns the identical coefficients from the identical tables.</p>
 

@@ -166,6 +166,12 @@
     padding: 0.55rem 0.8rem 0.6rem;
     margin-bottom: 0.6rem;
   }
+  .corr-src {
+    font-size: 0.68rem;
+    color: #6c757d;
+    margin-top: 0.15rem;
+    line-height: 1.25;
+  }
   .coef-panel-derived {
     border-color: #444444;
     /* Same gray as a disabled/locked form field (e.g. [Fe/H] when a model
@@ -372,6 +378,13 @@
                name, because that is what the papers, the CDS catalogues and
                the table column headings all use. -->
           <tr><td><em>&mu;</em><sub>cri</sub></td><td id="m_mucri">—</td></tr>
+          <!-- Maxted's empirically measured correction for this particular
+               table, shown only where he measured one.  Displayed beside the
+               table values rather than folded into them, so that a future
+               revision changes this line and not the meaning of the service. -->
+          <tr id="m_corr_row" style="display:none;">
+            <td>Maxted empirical correction</td><td id="m_corr">—</td>
+          </tr>
         </tbody>
       </table>
       <p class="law-eq mb-0" id="lawEquation">
@@ -1576,6 +1589,20 @@ function showResult(d) {
   $('m_mucri').textContent = (d.mu_cri == null)
         ? 'Not published (plane-parallel model)'
         : `${d.mu_cri} (applied)`;
+  // Present only for the tables Maxted actually measured; hidden otherwise
+  // rather than shown empty, so its absence is not read as a value of zero.
+  const mc = d.maxted_correction, mcRow = $('m_corr_row');
+  if (mcRow) {
+    if (mc) {
+      $('m_corr').innerHTML =
+        `<em>h</em><sub>1</sub>&prime; = ${fmt(mc.h1_prime)} &plusmn; ${fmt(mc.h1_prime_err)}` +
+        `&nbsp;&nbsp;&nbsp;<em>h</em><sub>2</sub>&prime; = ${fmt(mc.h2_prime)} &plusmn; ${fmt(mc.h2_prime_err)}` +
+        `<div class="corr-src">${mc.table} / ${mc.band} &middot; ${mc.source}</div>`;
+      mcRow.style.display = '';
+    } else {
+      mcRow.style.display = 'none';
+    }
+  }
   $('copyBtn').hidden = false;
 }
 
@@ -1586,6 +1613,7 @@ function clearResult() {
   });
   clearDerived();
   ['m_filter','m_model','m_method','m_source','m_mucri'].forEach(id => $(id).textContent = '—');
+  const _cr = $('m_corr_row'); if (_cr) _cr.style.display = 'none';
   $('copyBtn').hidden = true;
 }
 
