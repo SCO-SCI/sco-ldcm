@@ -29,6 +29,16 @@ LAYERS
                                models away from 2 km/s, non-solar metallicity
                                away from 2 km/s. Exhaustive on code, sampled
                                live.
+  5         layer5_derived.py  the fields Phase 2 added: h1_prime and h2_prime
+                               present, finite, and equal to an independent
+                               evaluation of the law at the two positions;
+                               edge_point_applied true exactly when the table
+                               supplied mu_cri; maxted_correction present for
+                               exactly the three combinations Maxted measured
+                               and absent, not null, everywhere else.
+                               Layer 1 removes these fields before comparing,
+                               so this layer is what checks them.
+
   1 live    layer1_live.py     production vs test service on a deterministic
                                sample (default 300 points per law), prefixed
                                compute identical after removing xi; for the
@@ -44,6 +54,12 @@ RUNNING
     git clone <repo> v5 && git -C v5 checkout v5
     pip install fastapi requests
     python run_all.py --v4 ./v4 --v5 ./v5
+  Layer 1 live keeps a checkpoint per law so a long sweep can resume.  That
+  also means it will report a PREVIOUS run's figures if the checkpoints are
+  left in place -- it once reported 300 failures for a 120-point request, which
+  cost some time to understand.  Before a gate run, delete them:
+    rm results/l1live_*_checkpoint.json
+
   Results land in results/: report.md, summary.json, one JSON per layer,
   and for layer 1 local the two response dumps per law (large; delete
   after a run). Exit code 0 means zero discrepancies everywhere.
@@ -53,3 +69,19 @@ RUNNING
 THE GATE
   A promotion of v5 to production requires a run of this harness against
   the final commit with zero discrepancies in every layer.
+
+  KEEPING THE HARNESS HONEST
+  Layers 1 local and 1 live compare a v5 response against a v4 one, so every
+  field v5 adds must be removed before the comparison or every point fails.
+  Those fields are named in three places that must stay in step:
+      engine_dump.V5_ADDED        (layer 1 local)
+      layer1_live.V5_ADDED        (layer 1 live)
+      parent_app.LEGACY_WITHHELD  (the service itself)
+  Add a field to a compute response and it belongs in all three at once.
+  Phase 2 added five and, until this was noticed, layer 1 reported 1.42
+  million intended differences -- a gate that fails on everything is worse
+  than no gate, because the response to a wall of known-good failures is to
+  wave it through.
+
+  Whatever is removed from the comparison must be checked somewhere else.
+  That is what layer 5 is for.

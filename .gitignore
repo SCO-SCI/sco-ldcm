@@ -14,3 +14,12 @@ v5_step*_verify.py
 # ignored, so the repository ends up carrying 52 MB of files the service does
 # not use.  Keeping them out means there is nothing to remember to regenerate.
 *.pkl
+
+# Working files the test harness writes on each run.  The per-law response
+# dumps run to tens of megabytes and the point lists regenerate in seconds;
+# the checkpoints must not be committed at all, because a stale one makes
+# layer 1 live report a previous run's figures instead of testing anything.
+# The per-layer summaries and report.md ARE tracked: they are the record of
+# a gate run.
+tests/harness/results/*.jsonl
+tests/harness/results/l1live_*_checkpoint.json

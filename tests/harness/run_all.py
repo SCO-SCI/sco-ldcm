@@ -16,7 +16,8 @@ a = ap.parse_args(); os.makedirs(a.results, exist_ok=True)
 steps = []
 if a.only in ("local", "all"):
     steps += [("layer1_local", ["layer1_local.py", "--v4", a.v4, "--v5", a.v5]),
-              ("layer2_velocity", ["layer2_velocity.py", "--v5", a.v5])]
+              ("layer2_velocity", ["layer2_velocity.py", "--v5", a.v5]),
+              ("layer5_derived", ["layer5_derived.py", "--v5", a.v5])]
 if a.only in ("live", "all"):
     steps += [("layer3_catalog", ["layer3_catalog.py", "--v5", a.v5, "--base", a.test]),
               ("layer4_refusals", ["layer4_refusals.py", "--v5", a.v5, "--live", a.test]),
@@ -29,7 +30,7 @@ for name, cmd in steps:
     if r.returncode not in (0, 2): print(r.stderr[-1500:])
 # assemble
 summary = {"run_utc": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"), "v4": a.v4, "v5": a.v5, "prod": a.prod, "test": a.test, "exit_codes": codes, "layers": {}}
-for name in ("layer1_local", "layer2_velocity", "layer3_catalog", "layer4_refusals", "layer1_live"):
+for name in ("layer1_local", "layer2_velocity", "layer5_derived", "layer3_catalog", "layer4_refusals", "layer1_live"):
     p = os.path.join(a.results, name + ".json")
     if os.path.exists(p): summary["layers"][name] = json.load(open(p))
 json.dump(summary, open(os.path.join(a.results, "summary.json"), "w"), indent=1)
@@ -37,6 +38,12 @@ L = summary["layers"]; lines = [f"# SCO-LDC v5 harness report — {summary['run_
 if "layer1_local" in L:
     lines.append("## Layer 1, local: v4 code vs v5 code, every node, cell centre and random interior point at 2 km/s")
     for law, v in L["layer1_local"].items(): lines.append(f"- {law}: {v['points']} points, {v['discrepancies']} discrepancies")
+if "layer5_derived" in L:
+    lines += ["## Layer 5 — the fields Phase 2 added", ""]
+    for law, v in L["layer5_derived"].items():
+        lines.append(f"- {law}: {v['points']} points, {v['discrepancies']} discrepancies, "
+                     f"{v['with_edge_point']} with an edge point, {v['with_correction']} with a correction")
+    lines.append("")
 if "layer2_velocity" in L:
     lines.append("## Layer 2: velocity tables, nodes vs table rows and interior points vs independent oracle")
     for law, v in L["layer2_velocity"].items(): lines.append(f"- {law}: " + ", ".join(f"{k} {x['points']}/{x['failures']}" for k, x in v["by_velocity"].items()) + " (points/failures)")

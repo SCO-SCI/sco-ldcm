@@ -1,6 +1,6 @@
 """Layer 1 (live): a deterministic sample of Ed's enumeration is requested from
 production and from the service under test. Prefixed compute responses must
-be identical after removing the xi field the new service adds; for the
+be identical after removing the fields the new service adds; for the
 quadratic law the legacy /api/compute must be byte-identical with nothing
 removed, and the legacy filters, health (stable fields) and a fixed list of
 error and malformed requests must match as well. Rate-limited, retried and
@@ -19,12 +19,24 @@ LEGACY_EDGE = [  # the legacy error and malformed-input paths, compared byte for
     "/api/filters", "/api/filters?xi=8", "/api/resolve?planet=NOT-A-PLANET-XYZ", "/api/nonexistent",
 ]
 
-def strip_xi(text):
+# The fields v5 adds to a prefixed compute response.  Kept in step with
+# engine_dump.V5_ADDED and parent_app.LEGACY_WITHHELD: all three lists name the
+# same set, and a field added to one belongs in the others at the same time.
+# This layer compares production against the test service, so any field the
+# test service has and production does not must be removed before comparing --
+# otherwise every point fails, as 900 did after Phase 2.
+V5_ADDED = ("xi", "h1_prime", "h2_prime", "edge_point_applied", "mu_cri",
+            "maxted_correction")
+
+
+def strip_added(text):
     try:
         d = json.loads(text)
     except Exception:
         return text
-    if isinstance(d, dict): d.pop("xi", None)
+    if isinstance(d, dict):
+        for k in V5_ADDED:
+            d.pop(k, None)
     return json.dumps(d, separators=(",", ":"), sort_keys=False)
 
 ap = argparse.ArgumentParser()
@@ -44,7 +56,7 @@ for law in a.laws.split(","):
         p = sample[idx]; q = dict(teff=p["teff"], logg=p["logg"], feh=p["feh"], filter=p["filter"], model=p["model"])
         rl_p.wait(); cp, tp = query_live(f"{a.prod}/{law}/api/compute", q)
         rl_t.wait(); ct, tt = query_live(f"{a.test}/{law}/api/compute", q)
-        ok = cp == ct and cp is not None and strip_xi(tp) == strip_xi(tt)
+        ok = cp == ct and cp is not None and strip_added(tp) == strip_added(tt)
         if law == "quad" and ok:   # the frozen route: byte for byte, nothing removed
             rl_p.wait(); lp = query_live(f"{a.prod}/api/compute", q)
             rl_t.wait(); lt = query_live(f"{a.test}/api/compute", q)
