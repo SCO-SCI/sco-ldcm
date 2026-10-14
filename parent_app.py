@@ -152,14 +152,45 @@ def _refresh_supervisor():
             time.sleep(SUPERVISOR_RESTART_DELAY_SECONDS)
 
 
-_refresh_thread = threading.Thread(
-    target=_refresh_supervisor, name="shared-refresh-scheduler", daemon=True,
-)
-_refresh_thread.start()
-logger.info("Shared refresh scheduler thread started")
+# The scheduler thread MUST be created inside the process that serves requests.
+#
+# Starting it here, at import time, put it in whichever process imported this
+# module. Under gunicorn that import happens before the worker is forked, and
+# threads do not survive fork(): the worker inherits the Thread OBJECT, which
+# honestly reports itself as not alive, and no running thread. The worker then
+# answers every request from caches that nothing will ever refresh. That is why
+# nothing refreshed between 9 September and 13 October 2026 -- not an exception
+# killing the thread, but a thread that was never in the serving process.
+#
+# A startup hook runs inside the worker, after the fork, so the thread lives
+# where it is needed.
+_refresh_thread = None
+_refresh_thread_pid = None
+_refresh_thread_lock = threading.Lock()
+
+
+def _start_refresh_thread() -> None:
+    """Create the scheduler thread in this process. Safe to call more than once."""
+    global _refresh_thread, _refresh_thread_pid
+    with _refresh_thread_lock:
+        if _refresh_thread is not None and _refresh_thread.is_alive():
+            return
+        _refresh_thread = threading.Thread(
+            target=_refresh_supervisor, name="shared-refresh-scheduler", daemon=True,
+        )
+        _refresh_thread.start()
+        _refresh_thread_pid = os.getpid()
+        logger.info("Shared refresh scheduler thread started in pid %d",
+                    _refresh_thread_pid)
 
 
 app = FastAPI(title="SCO-LDC general (quadratic + power-2 + four-parameter)", version="4.0.0")
+
+
+@app.on_event("startup")
+def _start_background_work() -> None:
+    # Runs in the worker process, after any fork. See the note above.
+    _start_refresh_thread()
 
 app.mount("/quad", quad_app)
 app.mount("/power2", power2_app)
@@ -183,7 +214,12 @@ def _refresh_status():
     exofop = exofop_resolver.refresh_diagnostics()
     ages = [d["age_hours"] for d in (nea, exofop) if d["age_hours"] is not None]
     return JSONResponse({
-        "scheduler_thread_alive": _refresh_thread.is_alive(),
+        "scheduler_thread_alive": bool(_refresh_thread is not None
+                                       and _refresh_thread.is_alive()),
+        # If these two differ, the thread was started in a process that is not
+        # the one answering this request, and it will never do any work here.
+        "scheduler_pid": _refresh_thread_pid,
+        "serving_pid": os.getpid(),
         "refresh_hour_utc": REFRESH_HOUR_UTC,
         "worst_age_hours": max(ages) if ages else None,
         "nea": nea,
