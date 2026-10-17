@@ -201,9 +201,11 @@ def health() -> dict:
 
 @app.get("/api/filters")
 def filters(
-    xi: float = Query(ldc_core.DEFAULT_XI,
-                      description="Microturbulent velocity in km/s "
-                                  "(0, 1, 2, 4 or 8; default 2)"),
+    xi: Optional[float] = Query(None,
+                                description="Microturbulent velocity in km/s "
+                                            "(0, 1, 2, 4 or 8). Omitted: each "
+                                            "table at 2, or at the one velocity "
+                                            "it has (the JWST modes, at 1)."),
 ) -> dict:
     
     return {"filters": ldc_core.get_available_filters(xi)}
@@ -221,21 +223,25 @@ def compute(
     teff: float = Query(..., description="Effective temperature in K"),
     logg: float = Query(..., description="Surface gravity log g in cgs dex"),
     feh:  float = Query(0.0, description="Metallicity [Fe/H] in dex (solar=0.0)"),
-    filter: str = Query(..., alias="filter", description="Filter code (e.g. 'V', 'G', 'Kp', 'TESS', 'C')"),
-    model:  str = Query("ATLAS", description="Stellar atmosphere model: ATLAS, PHOENIX, or PHOENIX-COND"),
-    xi:     float = Query(ldc_core.DEFAULT_XI,
-                          description="Microturbulent velocity in km/s "
-                                      "(0, 1, 2, 4 or 8; default 2). Any value "
-                                      "other than 2 is ATLAS only."),
+    filter: str = Query(..., alias="filter", description="Filter code (e.g. 'V', 'G', 'Kp', 'TESS', 'C', 'PRISM')"),
+    model:  str = Query("ATLAS", description="Stellar atmosphere model: ATLAS, PHOENIX, "
+                                             "PHOENIX-COND, or PHOENIX-NE (JWST modes)"),
+    xi:     Optional[float] = Query(None,
+                                    description="Microturbulent velocity in km/s "
+                                                "(0, 1, 2, 4 or 8). Omitted: 2, or the "
+                                                "one velocity the chosen table has "
+                                                "(the JWST tables exist at 1 only). Any "
+                                                "value other than 2 is otherwise ATLAS only."),
 ) -> dict:
     
     try:
         result = ldc_core.compute_ldcs(teff, logg, feh, filter, model, xi)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    # Self-describing: state which velocity produced these numbers.
+    # Self-describing: the response carries the velocity that produced these
+    # numbers in its "xi" field, set by the engine -- the velocity asked for,
+    # or the one the single-velocity rule chose when none was asked for.
     # The legacy unprefixed route strips this key -- see parent_app.
-    result["xi"] = ldc_core._norm_xi(xi)
     return result
 
 

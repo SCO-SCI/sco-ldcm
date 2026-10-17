@@ -435,7 +435,12 @@
     <a href="https://www.aanda.org/articles/aa/full_html/2023/06/aa45784-22/aa45784-22.html" target="_blank" rel="noopener">Claret &amp; Southworth (2023, <em>A&amp;A</em> 674, A63)</a>
     using PHOENIX-COND spherical models at solar metallicity. For the CHEOPS filter,
     coefficients are from Claret &amp; Southworth (2023) using PHOENIX-COND models
-    (solar metallicity only).
+    (solar metallicity only). For the eleven JWST observing modes (NIRCam F210M, F322W2
+    and F444W; NIRISS SOSS orders 1 and 2 and F277W; NIRSpec G235H, G235M, G395H, G395M
+    and PRISM), coefficients are from
+    <a href="https://www.aanda.org/articles/aa/full_html/2025/07/aa54770-25/aa54770-25.html" target="_blank" rel="noopener">Claret, Hauschildt &amp; Torres (2025, <em>A&amp;A</em> 699, A97)</a>
+    using spherical PHOENIX models of the NewEra generation (labelled PHOENIX-NE), at
+    solar metallicity and ξ = 1.0 km/s, for 2400&ndash;7800 K and log g 3.0&ndash;5.5.
   </p>
 
   <p class="small text-muted mb-2">
@@ -448,11 +453,16 @@
     For the Gaia (G<sub>BP</sub>, G, G<sub>RP</sub>), TESS, and CHEOPS filters, coefficients
     are from Claret &amp; Southworth (2023) using PHOENIX-COND models (solar metallicity only).
     For the CoRoT and Spitzer IRAC filters, coefficients are from Claret &amp; Bloemen (2011)
-    using ATLAS9 plane-parallel and PHOENIX models.
+    using ATLAS9 plane-parallel and PHOENIX models. The eleven JWST observing modes are
+    served under this law too, from the same Claret, Hauschildt &amp; Torres (2025) tables
+    (PHOENIX-NE, solar metallicity, ξ = 1.0 km/s). No quadratic table exists for them.
   </p>
 
   <p class="small text-muted mb-0">
-    Microturbulent velocity is fixed at ξ = 2.0 km/s. The LSM fitting method is used
+    Microturbulent velocity ξ can be chosen for the ATLAS tables (0, 1, 2, 4 or 8 km/s;
+    default 2.0). The PHOENIX and PHOENIX-COND tables are published at ξ = 2.0 km/s only
+    and the JWST (PHOENIX-NE) tables at ξ = 1.0 km/s only; a filter published at a single
+    velocity is served at that velocity. The LSM fitting method is used
     throughout. No extrapolation is performed beyond grid boundaries.
 		
 	<span style="display:inline">A REST API is available and is documented
@@ -501,6 +511,14 @@ const lookupStatusEl = $('lookupStatus');
  *   order. A conflicting pair can never be built, so there are no conflict
  *   messages -- the field simply never offered the value that would clash.
  *
+ * One refinement, Phase 3 (decision, E. Mullen, 10 October 2026): the filter
+ * drives. The observation was made in a filter, so the filter is the one
+ * setting a user cannot trade away; it is never greyed out on account of the
+ * model or the velocity. Choosing a filter moves those two to what it needs,
+ * and a setting moves only when the chosen filter has no table at it. The
+ * message area reports every such move. The function therefore also takes the
+ * field the user just touched (state.anchor), which it never treats as stale.
+ *
  * Two tiers. This evaluator owns C1-C4: which filters, models and velocities
  * are mutually compatible, and the advertised axis ranges. It does NOT own C5,
  * whether an exact (Teff, logg, feh) point has data -- grids are ragged and only
@@ -541,7 +559,8 @@ function scoEvaluate(state, capabilities) {
     ? null : Number(v);
   // The service treats PHOENIX and PHOENIX-COND as one underlying model, so the
   // evaluator must compare on model_key, not the display label. Resolve the
-  // selected display name to a key using the grids themselves.
+  // selected display name to a key using the grids themselves. PHOENIX-NE, the
+  // JWST tables, carries its own key and so is never merged with those two.
   function modelKeyOf(displayName) {
     if (displayName === null || displayName === undefined || displayName === '') return null;
     const hit = grids.find(g => g.model === displayName);
@@ -590,8 +609,8 @@ function scoEvaluate(state, capabilities) {
   // constraint holds (available), and the full universe the law offers (all).
   // Unavailable entries stay visible in the dropdown, greyed and unselectable,
   // so a user can see that e.g. TESS exists but needs a different model.
-  function optionsFor(field, key) {
-    const skip = new Set([field]);
+  function optionsFor(field, key, alsoSkip = []) {
+    const skip = new Set([field, ...alsoSkip]);
     const avail = new Set();
     for (const g of grids) if (ok(g, skip)) avail.add(g[key]);
     const all = new Set();
@@ -646,11 +665,18 @@ function scoEvaluate(state, capabilities) {
     .map((p, i) => (i > 0 && p.startsWith('with ') && phrases[i - 1].startsWith('with ')
                     ? p.slice(5) : p))
     .join(' or ');
-  function explain(field, matches) {
+  /* neverBlocks: settings that can never close this field and so are never
+     named in its tag. Since Phase 3 the model and the velocity never close a
+     filter (they move to follow it), so a filter's tag names typed values
+     only. Without this, a filter closed by a typed Teff was tagged
+     "Unavailable at \u03be = 2 km/s or at Teff = 2350", naming a velocity that
+     had nothing to do with it. Found by harness layer 6, October 2026. */
+  function explain(field, matches, neverBlocks = []) {
     const has = (skip, strict) => grids.some(g => matches(g) && ok(g, skip, strict));
-    if (has(new Set([field]))) return null;                  // it is available
-    const others = CONSTRAINTS.filter(([name, isSet]) => name !== field && isSet());
-    const relax = (names, strict) => has(new Set([field, ...names]), strict);
+    const base = [field, ...neverBlocks];
+    if (has(new Set(base))) return null;                     // it is available
+    const others = CONSTRAINTS.filter(([name, isSet]) => !base.includes(name) && isSet());
+    const relax = (names, strict) => has(new Set([...base, ...names]), strict);
     let opens = others.filter(([name]) => relax([name]));
     // When the typed [Fe/H] is itself a cause, do not offer as an alternative a
     // change that only works because a solar-only table would set that
@@ -660,7 +686,12 @@ function scoEvaluate(state, capabilities) {
     }
     if (opens.length === 1) return 'Unavailable ' + opens[0][2]();
     if (opens.length >= 2)  return 'Unavailable ' + joinCombination(opens.map(o => o[2]()));
-    for (let size = 2; size <= Math.min(3, others.length); size++) {
+    // Pairs, then triples, and so on up to every setting at once: an option
+    // always opens when everything is relaxed, because it exists. The search
+    // used to stop at triples, which left a bare "Unavailable" when three
+    // typed values and a dropdown all stood in the way (harness layer 6,
+    // October 2026).
+    for (let size = 2; size <= others.length; size++) {
       for (const combo of combinations(others, size)) {
         if (relax(combo.map(c => c[0]))) {
           return 'Unavailable ' + joinOr(combo.map(c => c[2]()));
@@ -669,14 +700,18 @@ function scoEvaluate(state, capabilities) {
     }
     return 'Unavailable';
   }
-  const filterReason = (code) => explain('filter', g => g.filter === code);
+  const filterReason = (code) => explain('filter', g => g.filter === code, ['model', 'xi']);
   // Models are matched on the DISPLAY name, not the underlying key. PHOENIX and
   // PHOENIX-COND share one key, so keying on it would report a grid as
   // reachable under a label the current filter does not actually offer.
   const modelReason  = (name) => explain('model',  g => g.model === name);
   const xiReason     = (value) => explain('xi',    g => g.xi === value);
 
-  const fRaw = optionsFor('filter', 'filter');
+  /* Phase 3 (decision, E. Mullen, 10 October 2026): the filter drives. A filter
+     is never closed by the model or the velocity. Choosing one moves those two
+     to what it needs, and the message area says so, exactly as a typed Teff
+     already moves the model. Only the typed values can close a filter. */
+  const fRaw = optionsFor('filter', 'filter', ['model', 'xi']);
   const filterOpts = fRaw.all
     .map(code => ({
       code,
@@ -688,14 +723,32 @@ function scoEvaluate(state, capabilities) {
   // which is the physical ordering the page has always shown (U, B, V, R, I,
   // J, H, K rather than alphabetical). Sorting would scramble it.
 
-  const mRaw = optionsFor('model', 'model');
+  /* A setting moves only when the chosen filter has no table at it (decision,
+     E. Mullen, 10 October 2026). When the model (or the velocity) holds a value
+     the filter cannot use, it is about to move, and it must not drag the other
+     setting with it: a stale setting is ignored while the other setting's
+     options are worked out. Example: on PRISM / PHOENIX-NE / 1 km/s a user
+     chooses V. V has no PHOENIX-NE table, so the model is stale and moves to
+     ATLAS; V does have an ATLAS table at 1 km/s, so the velocity stays. Without
+     this the velocity would be computed against the stale model, find nothing,
+     and fall back to the default of 2. The field the user just touched (the
+     anchor) is never treated as stale: it is the choice the others must follow.
+     This keeps the evaluator a function of its inputs; the anchor is one of
+     them (state.anchor), supplied by scoReadState. */
+  const anchor = state.anchor || null;
+  const mAvail0 = optionsFor('model', 'model').available;
+  const xAvail0 = optionsFor('xi', 'xi').available;
+  const modelStale = sel.model !== null && anchor !== 'model' && !mAvail0.includes(sel.model);
+  const xiStale    = sel.xi    !== null && anchor !== 'xi'    && !xAvail0.includes(sel.xi);
+
+  const mRaw = optionsFor('model', 'model', xiStale ? ['xi'] : []);
   const modelOpts = mRaw.all.map(m => ({
     value: m,
     available: mRaw.available.includes(m),
     reason: mRaw.available.includes(m) ? null : modelReason(m),
   }));
 
-  const xRaw = optionsFor('xi', 'xi');
+  const xRaw = optionsFor('xi', 'xi', modelStale ? ['model'] : []);
   const xiOpts = xRaw.all.sort((a, b) => a - b)
     .map(v => ({
       value: v,
@@ -799,6 +852,7 @@ const SCO_DEFAULT_XI = 2;
 /* The id of the field the user last changed. It is authoritative during
    settling: everything else adjusts around it. */
 let SCO_ANCHOR = null;
+let SCO_REFRESHING = false;   // a refresh is in progress (see scoWireValidation)
 
 /* Informational note. When the page changes a dropdown on the user's behalf,
    because a typed or looked-up value falls outside the chosen grid, it says so
@@ -922,8 +976,19 @@ function scoNoteAfterRefresh(origin, final) {
                  : items.slice(0, -1).join(', ') + ', and ' + items[items.length - 1];
       text = `No model available${list ? ' for ' + list : ''}.`;
     } else if (modelMoved) {
-      text = `${subject} ${plural ? 'require' : 'requires'} model ${final.model}` +
-             (xiMoved && final.xi !== '' ? ` at ξ = ${final.xi} km/s` : '') + '.';
+      // "requires model X" when X is the one model the filter can use at this
+      // velocity. When more than one would do, the page has taken the first
+      // in the list (ATLAS) and the note names them all, "Filter V requires
+      // model ATLAS or PHOENIX-COND.", so the choice is visible and the
+      // alternative is one click away (decision (i), E. Mullen, 10 October
+      // 2026).
+      const probe = scoEvaluate({ filter: final.filter || '', model: '', xi: final.xi,
+                                  teff: final.teff, logg: final.logg, feh: final.feh }, caps);
+      const names = probe.fields.model.available;          // dropdown order
+      const list = names.length <= 1 ? final.model
+                 : names.slice(0, -1).join(', ') + ' or ' + names[names.length - 1];
+      const xiPart = (xiMoved && final.xi !== '') ? ` at ξ = ${final.xi} km/s` : '';
+      text = `${subject} ${plural ? 'require' : 'requires'} model ${list}${xiPart}.`;
     } else {
       text = `${subject} ${plural ? 'require' : 'requires'} ξ = ${final.xi} km/s.`;
     }
@@ -964,6 +1029,9 @@ function scoReadState() {
     teffText: $('teff').value.trim(),
     loggText: $('logg').value.trim(),
     fehText:  $('feh').value.trim(),
+    // the field the user just touched, which the evaluator never treats as
+    // stale (see the note above mRaw in scoEvaluate)
+    anchor: (typeof SCO_ANCHOR !== 'undefined') ? SCO_ANCHOR : null,
   };
 }
 
@@ -1159,7 +1227,19 @@ function scoWireValidation() {
       // Typing "6000" passes through 6, 60 and 600, and evaluating each of
       // those would move the model away from the user's choice before the
       // real value is even entered.
-      el.addEventListener('change', () => { SCO_ANCHOR = id; scoRefresh(); SCO_ANCHOR = null; tryAutoCompute(); });
+      el.addEventListener('change', () => {
+        // Re-entrancy guard. A refresh can lock the metallicity field while it
+        // still has focus; the browser then blurs it and fires its change
+        // event in the middle of the refresh that caused it. That nested
+        // refresh has nothing to do (the outer one settles the form) but used
+        // to reset the anchor, so the note that followed said "The current
+        // selection" instead of naming the filter. Found with a JWST mode
+        // chosen after a non-solar [Fe/H] had been typed (October 2026).
+        if (SCO_REFRESHING) return;
+        SCO_REFRESHING = true;
+        try { SCO_ANCHOR = id; scoRefresh(); } finally { SCO_ANCHOR = null; SCO_REFRESHING = false; }
+        tryAutoCompute();
+      });
       el.dataset.scoWired = '1';   // guard against the historic listener leak
     }
   });
@@ -1198,8 +1278,8 @@ const LAW_CONFIG = {
       { id: "c2", label: "<em>h</em>", field: "h" },
     ],
     equation: "I(\u03bc) / I(1) = 1 \u2212 g\u00b7(1 \u2212 \u03bc<sup>h</sup>)",
-    models: [["ATLAS", "ATLAS"], ["PHOENIX-COND", "PHOENIX-COND"]],
-    catOrder: ["Johnson-Cousins", "Sloan/SDSS", "Str\u00f6mgren", "Gaia", "Space-based", "Exoplanet"],
+    models: [["ATLAS", "ATLAS"], ["PHOENIX-COND", "PHOENIX-COND"], ["PHOENIX-NE", "PHOENIX-NE"]],
+    catOrder: ["Johnson-Cousins", "Sloan/SDSS", "Str\u00f6mgren", "Gaia", "Space-based", "Exoplanet", "JWST"],
   },
   fourparam: {
     name: "Four-parameter",
@@ -1211,8 +1291,8 @@ const LAW_CONFIG = {
       { id: "c4", label: "a<sub>4</sub>", field: "a4" },
     ],
     equation: "I(\u03bc) / I(1) = 1 \u2212 a<sub>1</sub>(1\u2212\u03bc<sup>\u00bd</sup>) \u2212 a<sub>2</sub>(1\u2212\u03bc) \u2212 a<sub>3</sub>(1\u2212\u03bc<sup>3\u20442</sup>) \u2212 a<sub>4</sub>(1\u2212\u03bc\u00b2)",
-    models: [["ATLAS", "ATLAS"], ["PHOENIX", "PHOENIX"], ["PHOENIX-COND", "PHOENIX-COND"]],
-    catOrder: ["Johnson-Cousins", "Sloan/SDSS", "Str\u00f6mgren", "Gaia", "Space-based", "Exoplanet"],
+    models: [["ATLAS", "ATLAS"], ["PHOENIX", "PHOENIX"], ["PHOENIX-COND", "PHOENIX-COND"], ["PHOENIX-NE", "PHOENIX-NE"]],
+    catOrder: ["Johnson-Cousins", "Sloan/SDSS", "Str\u00f6mgren", "Gaia", "Space-based", "Exoplanet", "JWST"],
   },
 };
 
@@ -1294,6 +1374,14 @@ function resolveModelEntry(filter, displayName) {
     
     return filter.models.find(m => m.model === 'PHOENIX' || m.model === 'PHOENIX-COND') || null;
   }
+  // PHOENIX-NE (the JWST tables, Phase 3) is a separate model with its own
+  // key in the service.  It is deliberately NOT folded into the PHOENIX /
+  // PHOENIX-COND pair above: those two names reach one table, this one does
+  // not, and merging it here would let the page offer a JWST mode under a
+  // label the service refuses.
+  if (displayName === 'PHOENIX-NE') {
+    return filter.models.find(m => m.model === 'PHOENIX-NE') || null;
+  }
   return null;
 }
 
@@ -1302,8 +1390,8 @@ function resolveModelEntry(filter, displayName) {
 // filter actually supports.
 //
 // The model dropdown is rebuilt per law from LAW_CONFIG, so its option values
-// differ: quadratic offers ATLAS/PHOENIX, power-2 offers ATLAS/PHOENIX-COND,
-// four-parameter offers all three. Earlier code fell back to the literal string
+// differ: quadratic offers ATLAS/PHOENIX, power-2 offers ATLAS/PHOENIX-COND/
+// PHOENIX-NE, four-parameter offers all four. Earlier code fell back to the literal string
 // 'PHOENIX', which is not an option under power-2 -- assigning it left the
 // select blank, currentModelEntry null, and the Compute button reporting
 // "Please select a filter" even though a filter was clearly selected.

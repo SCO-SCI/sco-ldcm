@@ -45,6 +45,18 @@ _lower_keys: list[str] = []
 _hostname_index: dict[str, list[dict]] = {}
 _last_successful_live_refresh_utc: Optional[datetime] = None
 
+# Refresh diagnostics. These exist so that a failing refresh is visible without
+# reading the server log. They are deliberately NOT returned by cache_status(),
+# whose exact keys are serialised into the frozen /api/health route.
+_last_attempt_utc: Optional[datetime] = None
+_last_error: Optional[str] = None
+_consecutive_failures: int = 0
+
+# A good cache is never replaced by one that has lost more than this fraction of
+# its rows; a truncated body that still parses as JSON would otherwise install
+# itself silently.
+MIN_RETAINED_FRACTION = 0.5
+
 
 
 
@@ -211,14 +223,35 @@ def load_cache_at_startup(fallback_path: Optional[str] = None) -> dict:
 
 
 def refresh_cache_from_live() -> bool:
-    
+    """Fetch the table and install it. Never raises.
+
+    Everything is inside the guard, _set_cache included. Before this fix the
+    install step sat outside it, so a failure there propagated into the caller
+    -- the scheduler's thread -- and killed it silently, stopping every future
+    refresh with no restart and no message.
+    """
+    global _last_attempt_utc, _last_error, _consecutive_failures
+    _last_attempt_utc = datetime.now(timezone.utc)
     try:
         rows = _fetch_full_table_from_nea()
-    except Exception:
+        if not rows:
+            raise ValueError("NEA returned no usable rows")
+
+        held = len(_cache)
+        if held and len(rows) < held * MIN_RETAINED_FRACTION:
+            raise ValueError(
+                f"refusing a suspiciously small table: {len(rows)} rows "
+                f"against {held} currently held"
+            )
+
+        _set_cache(rows, refresh_time=datetime.now(timezone.utc))
+    except Exception as exc:
+        _last_error = f"{type(exc).__name__}: {exc}"
+        _consecutive_failures += 1
         return False
-    if not rows:
-        return False
-    _set_cache(rows, refresh_time=datetime.now(timezone.utc))
+
+    _last_error = None
+    _consecutive_failures = 0
     return True
 
 
@@ -228,6 +261,25 @@ def cache_status() -> dict:
         "count": len(_cache),
         "refreshed_utc": _last_successful_live_refresh_utc.strftime("%Y-%m-%d %H:%M UTC")
             if _last_successful_live_refresh_utc is not None else None,
+    }
+
+
+def refresh_diagnostics() -> dict:
+    """Why the cache is as old as it is. Separate from cache_status() on
+    purpose: cache_status()'s keys are serialised into the frozen /api/health
+    route and must not change."""
+    now = datetime.now(timezone.utc)
+    age = (None if _last_successful_live_refresh_utc is None
+           else round((now - _last_successful_live_refresh_utc).total_seconds() / 3600.0, 1))
+    return {
+        "count": len(_cache),
+        "refreshed_utc": _last_successful_live_refresh_utc.strftime("%Y-%m-%d %H:%M UTC")
+            if _last_successful_live_refresh_utc is not None else None,
+        "age_hours": age,
+        "last_attempt_utc": _last_attempt_utc.strftime("%Y-%m-%d %H:%M UTC")
+            if _last_attempt_utc is not None else None,
+        "consecutive_failures": _consecutive_failures,
+        "last_error": _last_error,
     }
 
 

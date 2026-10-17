@@ -4,6 +4,7 @@ import os
 from bisect import bisect_left
 from typing import Dict, List, Optional, Tuple
 
+from shared import jwst_modes as _jwst
 
 
 FILTER_REGISTRY: List[Dict] = [
@@ -40,12 +41,18 @@ FILTER_REGISTRY: List[Dict] = [
     {"code": "CBB", "name": "CBB (Blue Blocking Exoplanet)",
                                              "category": "Exoplanet",       "source": "CBBP2"},
 ]
+# The eleven JWST observing modes (Phase 3, October 2026): spherical PHOENIX
+# models of the NewEra generation, labelled PHOENIX-NE, solar composition,
+# 1 km/s only.  Defined once in shared/jwst_modes.py, which the four-parameter
+# engine reads too, so the two engines cannot disagree about them.
+FILTER_REGISTRY.extend(_jwst.registry_entries())
 
 
 SOURCE_CITATIONS: Dict[str, str] = {
     "CS22_CS23": "Claret & Southworth (2022, A&A 664, A128; 2023, A&A 674, A63)",
     "CS23_ONLY": "Claret & Southworth (2023, A&A 674, A63)",
     "CBBP2":     "Claret, Mullen & Gary CBB power-2 table",
+    _jwst.SOURCE: _jwst.CITATION,
 }
 
 
@@ -54,6 +61,9 @@ EXPECTED_MODELS: Dict[str, List[str]] = {
     "CS22_CS23": ["ATLAS", "PHOENIX"],   # ATLAS from CS22, PHOENIX from CS23
     "CS23_ONLY": ["PHOENIX"],            # CHEOPS: CS23 PHOENIX only
     "CBBP2":     ["ATLAS"],              # CBB: ATLAS only
+    # JWST: PHOENIX-NE only.  A storage key of its own, deliberately NOT the
+    # "PHOENIX" key that PHOENIX-COND shares: see _resolve_source_model.
+    _jwst.SOURCE: [_jwst.MODEL],
 }
 
 
@@ -261,13 +271,33 @@ def _parse_cbb_power2(path: str, source: str) -> int:
     return count
 
 
+def _parse_cht25(path: str) -> int:
+    """The JWST power-2 table, CDS J/A+A/699/A97 table3.dat.
+
+    Fixed-width, one row per (log g, Teff, mode), with the observing mode as
+    a column.  The layout and the mode list live in shared/jwst_modes.py.
+    Every row carries an edge point and a fit quality (a plain sum of squared
+    residuals, not the square root Claret 2018 published), which are kept in
+    ``aux`` exactly as for the PHOENIX-COND files, so that the Maxted
+    derivation applies the edge-point correction to these tables too.
+    """
+    key_xi = _norm_xi(_jwst.XI)
+
+    def _store(code, teff, logg, coeffs, mu_cri, fitq):
+        g, h = coeffs
+        _add_point((_jwst.SOURCE, code, key_xi, _jwst.MODEL),
+                   teff, logg, _jwst.FEH, g, h, aux=(mu_cri, fitq))
+
+    return _jwst.parse(path, 2, _store)
+
+
 
 
 
 import pickle
 
 CACHE_FILENAME = "tables.pkl"
-CACHE_VERSION = 3
+CACHE_VERSION = 4   # 4: the JWST table (c25/table3.dat) added, October 2026
 
 # (filter_code, source_tag) per band, in on-file column order.
 _T = "CS22_CS23"   # both ATLAS (CS22) and PHOENIX (CS23)
@@ -294,6 +324,7 @@ SOURCE_FILES = (
     os.path.join("c23", "table6.dat"),
     os.path.join("c23", "table10.dat"),
     os.path.join("cbb", "cbbpower2.txt"),
+    os.path.join("c25", "table3.dat"),
 )
 
 
@@ -321,6 +352,7 @@ def _parse_all(data_dir: str) -> Dict[str, int]:
     counts["c23/table6.dat"]  = _parse_cs23(j(data_dir, "c23", "table6.dat"),  _CS23_TABLE6_BANDS)
     counts["c23/table10.dat"] = _parse_cs23(j(data_dir, "c23", "table10.dat"), _CS23_TABLE10_BANDS)
     counts["cbb/cbbpower2.txt"] = _parse_cbb_power2(j(data_dir, "cbb", "cbbpower2.txt"), "CBBP2")
+    counts["c25/table3.dat"] = _parse_cht25(j(data_dir, "c25", "table3.dat"))
     _finalize_tables()
     return counts
 
@@ -383,9 +415,16 @@ def load_tables(data_dir: str, use_cache: bool = True) -> Dict[str, int]:
 
 
 
-def _resolve_table_key(filter_code: str, model: str,
-                       xi: float = DEFAULT_XI) -> Tuple[str, str, float, str]:
+def _resolve_source_model(filter_code: str, model: str) -> Tuple[str, str]:
+    """The source tag and storage model a request refers to.
 
+    PHOENIX-COND is a display label attached to the PHOENIX storage key, so
+    the two names reach the same table.  PHOENIX-NE is NOT: the JWST tables
+    are a different generation of the PHOENIX code and sit under their own
+    key, so a request naming PHOENIX or PHOENIX-COND for a JWST mode is
+    refused rather than quietly answered from the NewEra table, and the
+    reverse.  Merging the labels would make that refusal impossible.
+    """
     entry = None
     for f in FILTER_REGISTRY:
         if f["code"] == filter_code:
@@ -400,7 +439,47 @@ def _resolve_table_key(filter_code: str, model: str,
     else:
         storage_model = model.upper()
 
+    return source, storage_model
+
+
+def _resolve_table_key(filter_code: str, model: str,
+                       xi: float = DEFAULT_XI) -> Tuple[str, str, float, str]:
+
+    source, storage_model = _resolve_source_model(filter_code, model)
     return (source, filter_code, _norm_xi(xi), storage_model)
+
+
+def _velocities_held(source: str, filter_code: str, storage_model: str) -> List[float]:
+    """The velocities at which this filter and model have a table, ascending."""
+    return [v for v in SUPPORTED_XI
+            if (source, filter_code, _norm_xi(v), storage_model) in _TABLES]
+
+
+def _resolve_xi(source: str, filter_code: str, storage_model: str,
+                xi: Optional[float]) -> float:
+    """The velocity a request is served at.
+
+    THE SINGLE-VELOCITY RULE (decision, E. Mullen, 4 October 2026).  A caller
+    who does not name a velocity gets the default, 2 km/s, wherever the chosen
+    table has one -- which is every table the service held before Phase 3.
+    Where the chosen table exists at exactly one velocity and that velocity
+    is not the default, it is used without being asked.  The JWST tables
+    exist only at 1 km/s; without this rule every request for them that
+    omitted xi would be refused for implicitly asking for a 2 km/s table that
+    does not exist.  The rule is general rather than a JWST special case,
+    because the situation will recur.  A velocity the caller DOES name is
+    honoured as given, and refused if the table is not published at it.
+    """
+    if xi is not None:
+        return _norm_xi(xi)
+    held = _velocities_held(source, filter_code, storage_model)
+    if DEFAULT_XI in held or len(held) != 1:
+        return DEFAULT_XI
+    return held[0]
+
+
+def _velocity_list(values: List[float]) -> str:
+    return ", ".join(f"{v:g}" for v in values)
 
 
 def get_capabilities() -> List[Dict]:
@@ -448,15 +527,24 @@ def get_capabilities() -> List[Dict]:
     return out
 
 
-def get_available_filters(xi: float = DEFAULT_XI) -> List[Dict]:
+def get_available_filters(xi: Optional[float] = None) -> List[Dict]:
+    """The filters catalogue at one velocity.
 
+    With ``xi`` given, lists the models that have a table at exactly that
+    velocity.  With ``xi`` omitted, lists each model at the velocity a
+    compute request omitting xi would be served at: 2 km/s, or the one
+    velocity the table has (the single-velocity rule, see _resolve_xi).  The
+    two agree everywhere except for the JWST modes, which appear in the
+    omitted-xi catalogue and in the xi=1 catalogue, and nowhere else.
+    """
     out: List[Dict] = []
     for f in FILTER_REGISTRY:
         code = f["code"]
         source = f["source"]
         models_present: List[Dict] = []
         for storage_model in EXPECTED_MODELS[source]:
-            grid = _TABLES.get((source, code, _norm_xi(xi), storage_model))
+            v = _resolve_xi(source, code, storage_model, xi)
+            grid = _TABLES.get((source, code, v, storage_model))
             if grid is None:
                 continue
             teffs = grid["teffs"]   # type: ignore[index]
@@ -717,27 +805,48 @@ def aux_at(teff: float, logg: float, feh: float,
 
 def compute_ldcs(teff: float, logg: float, feh: float,
                  filter_code: str, model: str,
-                 xi: float = DEFAULT_XI
+                 xi: Optional[float] = None
                  ) -> Dict[str, object]:
 
-    xi = _norm_xi(xi)
-    if xi not in SUPPORTED_XI:
-        allowed = ", ".join(f"{v:g}" for v in SUPPORTED_XI)
-        raise ValueError(
-            f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
-            f"coefficients are published only at {allowed} km/s.")
+    # A velocity the caller names must be one Claret published at all.  This
+    # is checked before anything else, as it always was, so that the order of
+    # the refusals a caller can meet is unchanged.
+    if xi is not None:
+        xi = _norm_xi(xi)
+        if xi not in SUPPORTED_XI:
+            allowed = _velocity_list(list(SUPPORTED_XI))
+            raise ValueError(
+                f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
+                f"coefficients are published only at {allowed} km/s.")
 
-    table_key = _resolve_table_key(filter_code, model, xi)
-    source, code, _xi, storage_model = table_key
+    source, storage_model = _resolve_source_model(filter_code, model)
+    xi = _resolve_xi(source, filter_code, storage_model, xi)
+    table_key = (source, filter_code, xi, storage_model)
+    code = filter_code
     grid = _TABLES.get(table_key)
     if grid is None:
         model_name = _display_model(filter_code, storage_model)
-        if xi != DEFAULT_XI and _TABLES.get(
-                (source, code, DEFAULT_XI, storage_model)) is not None:
+        held = _velocities_held(source, code, storage_model)
+        if held:
+            # The table exists for this filter and model, just not at the
+            # velocity asked for.  Name the velocities it is published at.
             raise ValueError(
                 f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
                 f"the {model_name} table for filter {filter_code} is published "
-                f"only at {DEFAULT_XI:g} km/s.")
+                f"only at {_velocity_list(held)} km/s.")
+        # The filter is known but not with this model.  Name the models it
+        # does have, so that "not available" is never the whole answer: a
+        # JWST mode asked for with ATLAS or PHOENIX-COND is told PHOENIX-NE,
+        # CHEOPS asked for with ATLAS is told PHOENIX-COND, and so on.
+        offered = [_display_model(code, m) for m in EXPECTED_MODELS.get(source, [])
+                   if _velocities_held(source, code, m)]
+        if offered:
+            names = (offered[0] if len(offered) == 1
+                     else ", ".join(offered[:-1]) + " and " + offered[-1])
+            raise ValueError(
+                f"Invalid Input (model = {model}): filter {filter_code} is "
+                f"available only with the {names} "
+                f"model{'s' if len(offered) > 1 else ''}.")
         raise ValueError(
             f"no data for filter {filter_code!r} with model {model!r}")
 
@@ -895,4 +1004,8 @@ def compute_ldcs(teff: float, logg: float, feh: float,
             "fractions":    {"teff": tT, "logg": tG, "feh": tZ},
             "on_grid":      (tT == 0.0 and tG == 0.0 and tZ == 0.0),
         },
+        # The velocity these numbers came from: what the caller asked for, or
+        # what the single-velocity rule chose when the caller asked for none.
+        # Present on the prefixed routes only; the legacy route strips it.
+        "xi": xi,
     }

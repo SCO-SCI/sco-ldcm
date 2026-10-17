@@ -187,11 +187,11 @@
 <div class="container py-3" style="max-width: 820px; margin-top: 1.5rem;">
 
   <h1 class="mb-1">SCO-LDC API Reference</h1>
-  <p class="ver-tag mb-1">API version 5.0 &middot; Document version 2026-09-10</p>
+  <p class="ver-tag mb-1">API version 5.0 &middot; Document version 2026-10-08</p>
   <p class="mb-2">
     This document describes the HTTP/JSON API of <code>sco-ldc</code>, a web service that returns
-    stellar limb-darkening coefficients by trilinear interpolation of published Claret and
-    Claret &amp; Southworth coefficient tables, and that resolves exoplanet names to host-star
+    stellar limb-darkening coefficients by trilinear interpolation of published Claret,
+    Claret &amp; Southworth, and Claret, Hauschildt &amp; Torres coefficient tables, and that resolves exoplanet names to host-star
     stellar parameters from the NASA Exoplanet Archive (NEA) and ExoFOP-TESS. The service supports
     three limb-darkening laws, each reached through its own path prefix: the <strong>quadratic</strong>
     law (coefficients u<sub>1</sub>, u<sub>2</sub>), the <strong>power-2</strong> law
@@ -250,9 +250,11 @@
 
     <h3>Microturbulent velocity &xi;</h3>
     <p class="mb-2">The prefixed compute and filters endpoints accept an optional microturbulent velocity &xi;, passed as the
-    query parameter <code>xi</code> in km/s, with the published values 0, 1, 2, 4 and 8 and a default of 2. The unprefixed
-    legacy alias does not take this parameter: any <code>xi</code> given there is ignored and the alias returns exactly what it
-    always has, the 2 km/s tables. Details are in the compute section.</p>
+    query parameter <code>xi</code> in km/s, with the published values 0, 1, 2, 4 and 8. When it is omitted the default is 2 km/s,
+    except that a table published at exactly one velocity is served at that velocity without being asked: the JWST tables exist
+    at 1 km/s only, so a request for a JWST mode that omits <code>xi</code> is answered from the 1 km/s table and says so in its
+    <code>xi</code> field. The unprefixed legacy alias does not take this parameter: any <code>xi</code> given there is ignored and
+    the alias returns exactly what it always has, the 2 km/s tables. Details are in the compute section.</p>
 
     <h3>Authentication</h3>
     <p class="mb-2">None. sco-ldc&rsquo;s API is open and does not require API keys, tokens, registration, or any
@@ -309,8 +311,15 @@
       <li>A capabilities endpoint under each law prefix (<code>/quad/api/capabilities</code> and its siblings)</li>
       <li>Two new HTTP 400 refusals, reachable only when &xi; is given</li>
     </ul>
-    <p class="mb-2">The unprefixed <code>/api/&hellip;</code> alias was left untouched by version 5.0: its responses are byte-for-byte
-    what they were before it.</p>
+    <p class="mb-2">The same version, in October 2026, added the eleven JWST observing modes, again without changing any existing behaviour:</p>
+    <ul class="notes">
+      <li>Eleven new filter codes under the power-2 and four-parameter prefixes (F210M, F322W2, F444W, SOSS1, SOSS2, F277W, G235H, G235M, G395H, G395M, PRISM), from Claret, Hauschildt &amp; Torres (2025, A&amp;A 699, A97)</li>
+      <li>A fourth atmosphere model name, &lsquo;PHOENIX-NE&rsquo;, which those modes alone accept</li>
+      <li>The single-velocity rule: a table published at one velocity only is served at that velocity when <code>xi</code> is omitted (see the compute section)</li>
+      <li>Three new HTTP 400 refusals for the JWST modes, each naming what would work instead, and one on the quadratic prefix naming the laws that do serve them</li>
+    </ul>
+    <p class="mb-2">The unprefixed <code>/api/&hellip;</code> alias was left untouched by version 5.0 and by the JWST addition: its responses are byte-for-byte
+    what they were before them. It serves no JWST mode and never will: a JWST code sent to it is an unknown filter there, as it always was.</p>
     <div class="note-box">
       If breaking changes ever become necessary, they will be exposed through versioned URL paths
       (e.g., <code>/api/v2/compute</code>) rather than by modifying the existing endpoints. Callers can continue
@@ -382,7 +391,7 @@
         <tr><td><code>version</code></td><td><span class="type">string</span></td><td>Server-side application version identifier</td></tr>
         <tr><td><code>freshness</code></td><td><span class="type">string</span></td><td>&lsquo;ok&rsquo; if both planet caches refreshed within 48 h; else &lsquo;stale&rsquo;</td></tr>
         <tr><td><code>tables</code></td><td><span class="type">object</span></td><td>Row counts per source file. Keys are file names; values are integers</td></tr>
-        <tr><td><code>filter_count</code></td><td><span class="type">integer</span></td><td>Number of distinct filters loaded (currently 26)</td></tr>
+        <tr><td><code>filter_count</code></td><td><span class="type">integer</span></td><td>Number of distinct filters the law serves when <code>xi</code> is omitted: 26 for the quadratic law (and on this legacy alias), 35 for power-2 and 39 for four-parameter, the last two including the eleven JWST modes</td></tr>
         <tr><td><code>nea_cache.count</code></td><td><span class="type">integer</span></td><td>Rows currently held in the NEA planet cache</td></tr>
         <tr><td><code>nea_cache.refreshed_utc</code></td><td><span class="type">string</span></td><td>Last successful live refresh; null if never refreshed</td></tr>
         <tr><td><code>exofop_cache.count</code></td><td><span class="type">integer</span></td><td>Rows in the ExoFOP TOI cache</td></tr>
@@ -407,10 +416,13 @@
     along with their parameter grid ranges. Calling <code>/api/filters</code> is the authoritative way to discover what&rsquo;s
     currently supported; new filters or new model coverage can appear in future versions.</p>
     <p class="mb-2"><strong>Required parameters:</strong> none. &middot; <strong>Optional parameters:</strong> on the prefixed
-    paths only, <code>xi</code>, the microturbulent velocity &xi; in km/s (0, 1, 2, 4 or 8; default 2). When &xi; is given, the
-    catalog lists only the models that have a table at that velocity, and the ranges and point counts describe that velocity&rsquo;s
-    table. Since every table at a velocity other than 2 is ATLAS at solar metallicity, a catalog requested at 0, 1, 4 or 8 km/s
-    contains ATLAS entries only, with <code>feh_fixed</code> true. The unprefixed alias takes no parameters.</p>
+    paths only, <code>xi</code>, the microturbulent velocity &xi; in km/s (0, 1, 2, 4 or 8). When &xi; is given, the
+    catalog lists only the models that have a table at exactly that velocity, and the ranges and point counts describe that velocity&rsquo;s
+    table. When it is omitted, the catalog lists each model at the velocity a compute request omitting <code>xi</code> would be served at:
+    2 km/s, or the one velocity the table has. The two agree everywhere except for the JWST modes, which exist at 1 km/s only and so appear
+    in the omitted-&xi; catalog and in the &xi; = 1 catalog, and nowhere else. Every table at a velocity other than 2 is ATLAS at solar
+    metallicity or PHOENIX-NE (the JWST tables, at 1 km/s, solar), so a catalog requested at 0, 4 or 8 km/s contains ATLAS entries only, and one
+    requested at 1 km/s contains ATLAS and PHOENIX-NE entries, all with <code>feh_fixed</code> true. The unprefixed alias takes no parameters.</p>
 
     <h3>Response (HTTP 200, abbreviated to one filter entry)</h3>
     <pre class="code">{
@@ -475,9 +487,9 @@
     <h3>Notes for callers</h3>
     <ul class="notes">
       <li>Filter codes are case-sensitive. In particular, lowercase letters distinguish Str&ouml;mgren from uppercase Johnson: &ldquo;V&rdquo; is Johnson V; &ldquo;v&rdquo; is Str&ouml;mgren v. SDSS codes use a trailing asterisk: u*, g*, r*, i*, z*.</li>
-      <li>The complete current list of codes is: U, B, V, R, I, J, H, K, u, v, b, y, u*, g*, r*, i*, z*, Kp, C, S1, S2, S3, S4, TESS, CBB, CHEOPS.</li>
-      <li>The <code>model</code> parameter to <code>/api/compute</code> accepts the display name from the model field. Accepted values are &lsquo;ATLAS&rsquo;, &lsquo;PHOENIX&rsquo;, and &lsquo;PHOENIX-COND&rsquo;. Not every filter supports every model; the models array per filter is the authoritative list.</li>
-      <li>This catalog (via the unprefixed <code>/api/filters</code> or <code>/quad/api/filters</code>) is the quadratic filter set. The power-2 law has its own catalog at <code>/power2/api/filters</code> with a different filter set (it adds the Gaia bands and omits CoRoT and Spitzer) and its own model coverage. The four-parameter law has its own catalog at <code>/fourparam/api/filters</code> as well (it includes the Gaia bands and the CoRoT and Spitzer bands, but omits CBB). Query the catalog under the prefix of the law you intend to use.</li>
+      <li>The complete current list of codes for the quadratic law is: U, B, V, R, I, J, H, K, u, v, b, y, u*, g*, r*, i*, z*, Kp, C, S1, S2, S3, S4, TESS, CBB, CHEOPS. The power-2 and four-parameter laws add the eleven JWST modes: F210M, F322W2, F444W, SOSS1, SOSS2, F277W, G235H, G235M, G395H, G395M, PRISM. The JWST codes are Claret&rsquo;s own, exactly as the published file has them, so that an answer can be compared against the table; the instrument is in the filter name (&lsquo;NIRSpec PRISM&rsquo;, &lsquo;NIRISS SOSS Order 1&rsquo;). F277W exists on both NIRCam and NIRISS; in this table it is the NIRISS one.</li>
+      <li>The <code>model</code> parameter to <code>/api/compute</code> accepts the display name from the model field. Accepted values are &lsquo;ATLAS&rsquo;, &lsquo;PHOENIX&rsquo;, &lsquo;PHOENIX-COND&rsquo; and, for the JWST modes only, &lsquo;PHOENIX-NE&rsquo;. Not every filter supports every model; the models array per filter is the authoritative list.</li>
+      <li>This catalog (via the unprefixed <code>/api/filters</code> or <code>/quad/api/filters</code>) is the quadratic filter set. The power-2 law has its own catalog at <code>/power2/api/filters</code> with a different filter set (it adds the Gaia bands and the eleven JWST modes and omits CoRoT and Spitzer) and its own model coverage. The four-parameter law has its own catalog at <code>/fourparam/api/filters</code> as well (it includes the Gaia bands, the JWST modes, and the CoRoT and Spitzer bands, but omits CBB). Query the catalog under the prefix of the law you intend to use.</li>
       <li>When the <code>feh_fixed</code> flag is true, passing a feh value other than 0.0 to <code>/api/compute</code> will be rejected. The default feh=0.0 works correctly.</li>
       <li>The ranges in this catalog are the envelope of each table. The tables are not rectangular inside their envelopes;
       see &ldquo;The ATLAS grid&rdquo; in the compute section for where a request inside the envelope can still be refused.</li>
@@ -543,8 +555,8 @@
 
     <h3>Notes for callers</h3>
     <ul class="notes">
-      <li>The three laws hold 146, 138 and 139 grids respectively: 46, 46 and 47 at 2 km/s, and one per ATLAS filter at each of the other four velocities.</li>
-      <li>Entries whose <code>xi</code> is not 2 are always ATLAS with <code>feh_fixed</code> true. Entries for PHOENIX and PHOENIX-COND always have <code>xi</code> 2.</li>
+      <li>The three laws hold 146, 149 and 150 grids respectively: 46, 46 and 47 at 2 km/s, one per ATLAS filter at each of the other four velocities, and in the power-2 and four-parameter laws the eleven JWST grids at 1 km/s.</li>
+      <li>Entries whose <code>xi</code> is not 2 are ATLAS with <code>feh_fixed</code> true, or PHOENIX-NE (the JWST modes) at <code>xi</code> 1 with <code>feh_fixed</code> true. Entries for PHOENIX and PHOENIX-COND always have <code>xi</code> 2; entries for PHOENIX-NE always have <code>xi</code> 1.</li>
       <li>The envelope fields describe the box that contains the table, not the table itself. The point counts tell the rest of the story: the ATLAS table at 2 km/s fills 46.6 percent of its box. Where inside the box a request can be refused is described under &ldquo;The ATLAS grid&rdquo; in the compute section.</li>
       <li>This endpoint is what the sco-ldc web page reads to decide which dropdown entries to offer.</li>
     </ul>
@@ -669,8 +681,8 @@
       <thead><tr><th style="width:16%;">Name</th><th style="width:14%;">Type</th><th>Notes</th></tr></thead>
       <tbody>
         <tr><td><code>feh</code></td><td><span class="type">number</span></td><td>Metallicity [Fe/H] in dex. Defaults to 0.0 if omitted</td></tr>
-        <tr><td><code>model</code></td><td><span class="type">string</span></td><td>&lsquo;ATLAS&rsquo;, &lsquo;PHOENIX&rsquo;, or &lsquo;PHOENIX-COND&rsquo;. Defaults to &lsquo;ATLAS&rsquo; if omitted</td></tr>
-        <tr><td><code>xi</code></td><td><span class="type">number</span></td><td>Microturbulent velocity &xi; in km/s: 0, 1, 2, 4 or 8. Defaults to 2 if omitted. Prefixed paths only; the unprefixed alias ignores it. Values other than 2 exist for ATLAS at solar metallicity only (see &ldquo;Microturbulent velocity &xi;&rdquo; below)</td></tr>
+        <tr><td><code>model</code></td><td><span class="type">string</span></td><td>&lsquo;ATLAS&rsquo;, &lsquo;PHOENIX&rsquo;, &lsquo;PHOENIX-COND&rsquo;, or &lsquo;PHOENIX-NE&rsquo; (the JWST modes only; see &ldquo;The JWST tables&rdquo; below). Defaults to &lsquo;ATLAS&rsquo; if omitted</td></tr>
+        <tr><td><code>xi</code></td><td><span class="type">number</span></td><td>Microturbulent velocity &xi; in km/s: 0, 1, 2, 4 or 8. If omitted, 2 &mdash; or, for a table published at one velocity only, that velocity (the JWST tables, at 1). Prefixed paths only; the unprefixed alias ignores it. Values other than 2 exist for ATLAS at solar metallicity, and 1 for the JWST tables (see &ldquo;Microturbulent velocity &xi;&rdquo; below)</td></tr>
       </tbody>
     </table>
 
@@ -717,6 +729,24 @@
   <span class="c-key">"detail"</span>: <span class="c-str">"[Fe/H] -0.5 not available for V/ATLAS (solar metallicity only: +0.0)"</span>
 }</pre>
 
+    <h3>Responses for the JWST modes (HTTP 400, power-2 and four-parameter prefixes)</h3>
+    <p class="mb-2">Each of these refusals names what would work instead. A JWST mode with any model other than PHOENIX-NE:</p>
+    <pre class="code">{
+  <span class="c-key">"detail"</span>: <span class="c-str">"Invalid Input (model = ATLAS): filter PRISM is available only with the PHOENIX-NE model."</span>
+}</pre>
+    <p class="mb-2">The same wording now answers every request that names a model the filter does not have, on these two prefixes
+    (for example CHEOPS with ATLAS under power-2 is told &lsquo;available only with the PHOENIX-COND model&rsquo;).
+    A JWST mode with a velocity named explicitly, other than 1:</p>
+    <pre class="code">{
+  <span class="c-key">"detail"</span>: <span class="c-str">"Invalid Input (microturbulent velocity = 2 km/s): the PHOENIX-NE table for filter PRISM is published only at 1 km/s."</span>
+}</pre>
+    <p class="mb-2">A JWST mode at a non-solar metallicity is refused by the existing metallicity rule, since the table is solar only.
+    A JWST mode sent to the quadratic prefix, <code>/quad/api/compute</code>:</p>
+    <pre class="code">{
+  <span class="c-key">"detail"</span>: <span class="c-str">"PRISM &mdash; the JWST modes are served under the power-2 and four-parameter laws only."</span>
+}</pre>
+    <p class="mb-2">On the unprefixed alias the same request is an unknown filter, exactly as before: <code>{"detail": "Unknown filter: 'PRISM'"}</code>.</p>
+
     <h3>Field semantics</h3>
     <table class="api">
       <thead><tr><th style="width:22%;">Field</th><th style="width:16%;">Type</th><th>Notes</th></tr></thead>
@@ -738,7 +768,7 @@
         <tr><td><code>grid.fractions.logg</code></td><td><span class="type">number</span></td><td>Same for logg</td></tr>
         <tr><td><code>grid.fractions.feh</code></td><td><span class="type">number</span></td><td>Same for [Fe/H]</td></tr>
         <tr><td><code>grid.on_grid</code></td><td><span class="type">boolean</span></td><td>true if the input falls exactly on a grid point (no interpolation)</td></tr>
-        <tr><td><code>xi</code></td><td><span class="type">number</span></td><td>The microturbulent velocity &xi; used, km/s (2.0 when the parameter was omitted). Prefixed paths only</td></tr>
+        <tr><td><code>xi</code></td><td><span class="type">number</span></td><td>The microturbulent velocity &xi; used, km/s: the value asked for, or when the parameter was omitted 2.0 &mdash; or 1.0 for the JWST tables, which exist at that velocity only. Prefixed paths only</td></tr>
       </tbody>
     </table>
 
@@ -817,33 +847,93 @@
     <h3>Citation strings by source</h3>
     <ul class="notes">
       <li><strong>Quadratic:</strong> CB2011 filters &lsquo;Claret &amp; Bloemen (2011, A&amp;A 529, A75)&rsquo;; C2018 (TESS) &lsquo;Claret (2018, A&amp;A 618, A20)&rsquo;; C2021 (CHEOPS) &lsquo;Claret (2021, RNAAS 5, 13)&rsquo;; CMG2022 (CBB) &lsquo;Claret, Mullen &amp; Gary (2022, RNAAS 6, 169)&rsquo;.</li>
-      <li><strong>Power-2:</strong> ATLAS &lsquo;Claret &amp; Southworth (2022, A&amp;A 664, A128)&rsquo;; PHOENIX-COND &lsquo;Claret &amp; Southworth (2023, A&amp;A 674, A63)&rsquo;; CBB power-2 table (ATLAS).</li>
-      <li><strong>Four-parameter:</strong> ATLAS &lsquo;Claret &amp; Bloemen (2011, A&amp;A 529, A75)&rsquo;; PHOENIX-COND &lsquo;Claret &amp; Southworth (2023, A&amp;A 674, A63)&rsquo;; CoRoT and Spitzer PHOENIX use the 2011 PHOENIX models from Claret &amp; Bloemen (2011).</li>
+      <li><strong>Power-2:</strong> ATLAS &lsquo;Claret &amp; Southworth (2022, A&amp;A 664, A128)&rsquo;; PHOENIX-COND &lsquo;Claret &amp; Southworth (2023, A&amp;A 674, A63)&rsquo;; CBB power-2 table (ATLAS); the JWST modes &lsquo;Claret, Hauschildt &amp; Torres (2025, A&amp;A 699, A97)&rsquo;.</li>
+      <li><strong>Four-parameter:</strong> ATLAS &lsquo;Claret &amp; Bloemen (2011, A&amp;A 529, A75)&rsquo;; PHOENIX-COND &lsquo;Claret &amp; Southworth (2023, A&amp;A 674, A63)&rsquo;; CoRoT and Spitzer PHOENIX use the 2011 PHOENIX models from Claret &amp; Bloemen (2011); the JWST modes &lsquo;Claret, Hauschildt &amp; Torres (2025, A&amp;A 699, A97)&rsquo;.</li>
     </ul>
 
     <h3>Notes specific to the power-2 law</h3>
     <ul class="notes">
-      <li>Power-2 supports models ATLAS and PHOENIX-COND. ATLAS spans all tabulated metallicities; PHOENIX-COND is solar metallicity only.</li>
-      <li>CHEOPS is available for PHOENIX-COND only; CBB is available for ATLAS only. All other power-2 filters support both models.</li>
-      <li>Power-2 adds the Gaia bands (G, G_BP, G_RP); it does not include the CoRoT or Spitzer bands that the quadratic law offers.</li>
+      <li>Power-2 supports models ATLAS, PHOENIX-COND and, for the eleven JWST modes only, PHOENIX-NE. ATLAS spans all tabulated metallicities; PHOENIX-COND and PHOENIX-NE are solar metallicity only.</li>
+      <li>CHEOPS is available for PHOENIX-COND only; CBB is available for ATLAS only; the JWST modes for PHOENIX-NE only. All other power-2 filters support ATLAS and PHOENIX-COND.</li>
+      <li>Power-2 adds the Gaia bands (G, G_BP, G_RP) and the JWST modes; it does not include the CoRoT or Spitzer bands that the quadratic law offers.</li>
       <li>The PHOENIX-COND power-2 coefficients use the M2 (midpoint) truncation method.</li>
     </ul>
 
     <h3>Notes specific to the four-parameter law</h3>
     <ul class="notes">
       <li>The four-parameter law returns four coefficients (a<sub>1</sub>&ndash;a<sub>4</sub>) for Claret&rsquo;s non-linear law I(&mu;)/I(1) = 1 &minus; a<sub>1</sub>(1&minus;&mu;<sup>1/2</sup>) &minus; a<sub>2</sub>(1&minus;&mu;) &minus; a<sub>3</sub>(1&minus;&mu;<sup>3/2</sup>) &minus; a<sub>4</sub>(1&minus;&mu;<sup>2</sup>).</li>
-      <li>Four-parameter supports models ATLAS and PHOENIX-COND. ATLAS spans all tabulated metallicities; PHOENIX-COND is solar metallicity only.</li>
+      <li>Four-parameter supports models ATLAS, PHOENIX-COND and, for the eleven JWST modes only, PHOENIX-NE. ATLAS spans all tabulated metallicities; PHOENIX-COND and PHOENIX-NE are solar metallicity only.</li>
       <li>ATLAS coefficients come from Claret &amp; Bloemen (2011); PHOENIX-COND coefficients come from Claret &amp; Southworth (2023) for every band they cover.</li>
       <li>The Gaia bands (G, G_BP, G_RP), TESS, and CHEOPS are available for PHOENIX-COND only. CoRoT is available in ATLAS and in the older 2011 PHOENIX models (reported as model &lsquo;PHOENIX&rsquo;, not &lsquo;PHOENIX-COND&rsquo;). The Spitzer IRAC bands are ATLAS only. The four-parameter law does not include the CBB filter.</li>
       <li>Requesting model &lsquo;PHOENIX&rsquo; or &lsquo;PHOENIX-COND&rsquo; returns the same grid for a given filter; the two strings are accepted interchangeably on input, and the returned <code>model</code> field reflects the grid&rsquo;s own label (&lsquo;PHOENIX-COND&rsquo; for the Claret &amp; Southworth 2023 bands, plain &lsquo;PHOENIX&rsquo; for CoRoT).</li>
-      <li>a<sub>1</sub>&ndash;a<sub>4</sub> are returned as full-precision IEEE 754 doubles. The Claret published values are themselves to 4 decimal places; sco-ldc does not artificially round the interpolation result.</li>
+      <li>a<sub>1</sub>&ndash;a<sub>4</sub> are returned as full-precision IEEE 754 doubles. The Claret published values are themselves to 4 decimal places (6 for the JWST tables); sco-ldc does not artificially round the interpolation result.</li>
+    </ul>
+
+    <h3 id="jwst">The JWST tables (PHOENIX-NE)</h3>
+    <p class="mb-2">Since October 2026 the power-2 and four-parameter prefixes serve eleven JWST observing modes from
+    Claret, Hauschildt &amp; Torres (2025, A&amp;A 699, A97; CDS catalogue J/A+A/699/A97): three NIRCam filters (F210M, F322W2, F444W),
+    three NIRISS modes (SOSS1 and SOSS2, the two orders of the SOSS spectrograph, and the F277W filter) and five NIRSpec modes
+    (G235H, G235M, G395H, G395M, PRISM; the four gratings are used with a blocking filter and are shown as G235H/F170LP, G235M/F170LP, G395H/F290LP and G395M/F290LP). The quadratic law has none, because Claret published none: his section 4 argues the
+    quadratic law fits these models poorly and does not conserve flux, and recommends the four-parameter law, then power-2.</p>
+    <ul class="notes">
+      <li><strong>The model.</strong> Spherically symmetric PHOENIX models of the NewEra generation (Hauschildt et al. 2025, A&amp;A 698, A47),
+      labelled PHOENIX-NE. They are a different vintage from the PHOENIX-COND tables the service already holds &mdash; the model-grid
+      paper reports updated molecular line lists as the main source of the differences from earlier PHOENIX generations, and these
+      tables were computed at a different microturbulent velocity &mdash; so they carry their own model name.
+      A JWST mode asked for with &lsquo;PHOENIX&rsquo; or &lsquo;PHOENIX-COND&rsquo; is refused, and PHOENIX-NE is accepted for no other filter.</li>
+      <li><strong>The grid.</strong> T<sub>eff</sub> 2400 to 7800 K: every 100 K up to 7000 K, then every 200 K (7200, 7400, 7600, 7800), 51 nodes
+      in all; log g 3.0 to 5.5 in steps of 0.5; solar composition only; microturbulent velocity 1.0 km/s only. Every one of the
+      51 &times; 6 &times; 11 = 3,366 cells is populated in both files, so no request inside the envelope is refused for a missing corner.
+      Between 7000 and 7800 K a request interpolates across the 200 K step, as the <code>grid.teff_bracket</code> field shows.</li>
+      <li><strong>The velocity.</strong> The tables exist at 1 km/s only. A request that omits <code>xi</code> is served at 1 km/s and the
+      response says so; a request that names any other velocity is refused by name. This is the single-velocity rule described under
+      &ldquo;Microturbulent velocity &xi;&rdquo; above, and it is a general rule, not a JWST special case.</li>
+      <li><strong>The edge point is fixed a little differently here.</strong> Claret &amp; Southworth (2023), the source of the PHOENIX-COND
+      power-2 and four-parameter tables, published every table under two conventions for the limb, and the service holds their M2 tables,
+      in which the limb is the midpoint between the point where dI/dr is largest (r = &radic;(1 &minus; &mu;<sup>2</sup>)) and the adjacent
+      point of the &mu; grid. The JWST tables follow Wittkowski et al. (2004) and take the point of largest dI/dr itself, which the paper
+      notes corresponds to a Rosseland mean optical depth of about 1; that is the M1 convention of the 2023 paper. The rescaling a user
+      applies to reproduce h<sub>1</sub>&prime; and h<sub>2</sub>&prime; is the same in both cases, but the two sets of tables do not
+      define the edge point in exactly the same way. The edge points here run from 0.019 to 0.138, the same range as the other spherical
+      tables over the same temperatures and gravities (0.016 to 0.155 for 2400&ndash;7800 K at log g &ge; 3.0).</li>
+      <li><strong>The fit-quality column</strong> that Claret publishes with these tables, and that the service reads but does not display, is a
+      plain sum of squared residuals &mdash; not divided by anything, not square-rooted. His 2018 TESS table publishes the square root
+      instead. The two cannot be compared directly.</li>
+      <li><strong>Which law to prefer.</strong> By Claret&rsquo;s own fit-quality figures the four-parameter law follows the simulation better than
+      power-2 in 86.8 per cent of the 3,366 cells (median ratio 1.3, worst 112), but power-2 fits better in the remaining 13.2 per cent, down to
+      a ratio of 0.61. The paper states the order of preference as four-parameter, then power-2; it does not say power-2 sometimes wins.</li>
+      <li><strong>A hazard in interpolating the power-2 coefficients.</strong> At eleven of the 3,366 nodes the published power-2 fit is
+      degenerate: the exponent h is near zero and g is correspondingly huge (F322W2 at log g 3.0 for 2700, 2800 and 2900 K, with g of 1026,
+      5626 and 12; G235H and G235M at log g 3.0 for 2500 to 2800 K, with g between 5 and 26). At such a node the pair still describes a
+      sensible profile, but linear interpolation of g and h between a degenerate fit and an ordinary one does not: for F322W2 between
+      2600 and 2900 K at log g 3.0 to 3.5 the interpolated coefficients give h<sub>1</sub>&prime; between &minus;6 and &minus;19, which no star
+      can have, and for G235H and G235M in the same gravity range at 2400 to 2800 K, and for F444W at 7200 to 7800 K and log g 3.0 to 4.0,
+      the interpolated h<sub>1</sub>&prime; is off by 0.03 to 0.12 from what the neighbouring nodes imply. The service interpolates the
+      published coefficients as it does for every table and does not intervene. For a star in those cells, use the four-parameter law,
+      whose JWST table has no degenerate fits and whose interpolation stays within 0.01 of the node profiles everywhere; or request an exact
+      node. (The same hazard exists, at corners of the grid few hosts occupy, in the power-2 tables the service has always served.)</li>
+      <li><strong>Nobody has yet tested NewEra limb darkening against real stars.</strong> The model-grid paper compares NewEra against earlier
+      generations at length, and its only observational check on limb darkening is a reference to a 2014 figure. Maxted&rsquo;s 2023
+      comparison of nine tabulations against 43 stars predates these tables and did not include them. Empirical offsets for JWST have been
+      measured for other grids: Sing et al. (2026, arXiv:2609.00263) fitted seven FGK hosts with NIRISS/SOSS and NIRSpec/PRISM and give
+      recommended offset priors for the PHOENIX (Husser et al. 2013), MPS-ATLAS and Stagger grids in quadratic coefficients, finding real stars
+      slightly less limb-darkened than all four grids predict. No such measurement exists for PHOENIX-NE, so no <code>maxted_correction</code>
+      object accompanies any JWST answer (see &sect;9).</li>
+      <li><strong>More passbands can be had.</strong> The models span 0.1 to 6.0 &mu;m and the paper invites requests for other photometric
+      systems in that range.</li>
     </ul>
 
     <h3>Microturbulent velocity &xi;</h3>
     <p class="mb-2">Claret&rsquo;s ATLAS tables are published at five microturbulent velocities, 0, 1, 2, 4 and 8 km/s. Before
     version 5.0 the service held the 2 km/s tables only; it now holds all five, and the prefixed compute endpoints select among
     them with the <code>xi</code> parameter. The tables at 0, 1, 4 and 8 km/s exist for ATLAS at solar metallicity only, for every
-    ATLAS filter in every law. The PHOENIX and PHOENIX-COND tables exist at 2 km/s only.</p>
+    ATLAS filter in every law. The PHOENIX and PHOENIX-COND tables exist at 2 km/s only, and the JWST tables (PHOENIX-NE) at 1 km/s only.</p>
+    <p class="mb-2"><strong>The single-velocity rule.</strong> A request that omits <code>xi</code> is served at 2 km/s wherever the
+    chosen table has a 2 km/s version, which is every table the service held before October 2026. Where the chosen table exists at
+    exactly one velocity and that velocity is not 2, it is used without being asked. The JWST tables exist only at 1 km/s, and without this
+    rule every request for them that omitted <code>xi</code> would have been refused for implicitly asking for a 2 km/s table that does
+    not exist. The rule is general rather than a JWST special case, because the situation will recur. A velocity the caller
+    <em>does</em> name is honoured as given, and refused by name if the table is not published at it.</p>
     <ul class="notes">
       <li>The four non-default tables share the ATLAS envelope, 3500 to 50000 K and log g 0 to 5, and the same temperature nodes as the
       solar 2 km/s grid except that the three half-step nodes at 37500, 42500 and 47500 K do not exist at these velocities. A request at
@@ -930,7 +1020,10 @@
     <p class="mb-2">For the spherically symmetric simulations there is a further point. Those produce a
     sharp brightness cliff very close to the edge of the disc that no simple formula can follow. Claret
     fits his formula only as far out as that cliff, at &mu;<sub>cri</sub>, and defines the star as dark
-    beyond it. Both halves are the product: the coefficients and that instruction.</p>
+    beyond it. Both halves are the product: the coefficients and that instruction. Where that cliff is
+    placed differs between generations of his tables: the PHOENIX-COND tables use a convention, the JWST
+    PHOENIX-NE tables the point where the brightness falls fastest (see &ldquo;The JWST tables&rdquo; in &sect;8).
+    The rescaling below is the same in both cases.</p>
 
     <h3>How to reproduce these values</h3>
     <p class="mb-2">For the spherically symmetric tables the two measurement positions are moved inward
@@ -1017,7 +1110,9 @@
     </table>
 
     <p class="mb-2">Everywhere else the object is <strong>absent</strong> &mdash; not null &mdash; because
-    no such measurement exists for that table. A correction measured on one table must not be applied to
+    no such measurement exists for that table. That includes every JWST mode: he measured Kepler and TESS light
+    curves, and nobody has yet done the equivalent for the PHOENIX-NE tables, so a JWST answer never carries a
+    correction, which is the case where a user might most want one. A correction measured on one table must not be applied to
     values from another: different tables give different values for the same star, so borrowing one would
     introduce an error of the same order as the correction itself. It is also applied only at the default
     microturbulent velocity, since the other variants carry a different offset from reality and Maxted
@@ -1073,6 +1168,9 @@
         <tr><td>/api/compute unknown filter or model</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip;" }</code></td></tr>
         <tr><td>Prefixed compute, &xi; not one of 0, 1, 2, 4, 8</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip; published only at 0, 1, 2, 4, 8 km/s." }</code></td></tr>
         <tr><td>Prefixed compute, &xi; other than 2 for a PHOENIX or PHOENIX-COND table</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip; published only at 2 km/s." }</code></td></tr>
+        <tr><td>Prefixed compute, &xi; other than 1 for a JWST mode</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip; the PHOENIX-NE table for filter PRISM is published only at 1 km/s." }</code></td></tr>
+        <tr><td>Power-2 or four-parameter compute, a model the filter does not have (a JWST mode with ATLAS or PHOENIX-COND, CHEOPS with ATLAS, &hellip;)</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "Invalid Input (model = &hellip;): filter &hellip; is available only with the &hellip; model." }</code></td></tr>
+        <tr><td>Quadratic prefix, a JWST mode</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "&hellip; &mdash; the JWST modes are served under the power-2 and four-parameter laws only." }</code></td></tr>
         <tr><td>Prefixed compute, non-solar [Fe/H] at &xi; other than 2</td><td><span class="status-chip s-4xx">400</span></td><td><code>{ "detail": "[Fe/H] &hellip; not available &hellip; (solar metallicity only: +0.0)" }</code></td></tr>
         <tr><td>Prefixed compute, non-numeric &xi;</td><td><span class="status-chip s-422">422</span></td><td>FastAPI default validation error shape</td></tr>
         <tr><td>Missing required query parameter</td><td><span class="status-chip s-422">422</span></td><td>FastAPI default validation error shape</td></tr>
@@ -1128,7 +1226,9 @@
     <h3>Filter discovery</h3>
     <p class="mb-2">Callers should ideally call <code>/api/filters</code> once per session (at startup, or lazily on first use) to
     discover the supported filters and grid ranges, rather than hardcoding the filter list. New filters may be added in future
-    versions; calling <code>/api/filters</code> keeps the caller current automatically.</p>
+    versions; calling <code>/api/filters</code> keeps the caller current automatically. Call it without <code>xi</code> to see every
+    filter at the velocity it is served at by default; the JWST modes, published at 1 km/s only, are listed there and under
+    <code>?xi=1</code>, but not under <code>?xi=2</code>.</p>
 
     <h3>Citation surfacing</h3>
     <p class="mb-2">Each <code>/api/resolve</code> and <code>/api/compute</code> response includes a citation field. If a caller
@@ -1177,6 +1277,15 @@
 <span class="prompt">$</span> curl 'https://sco-ldc.com/quad/api/compute?teff=6000&amp;logg=4.5&amp;feh=0.0&amp;filter=V&amp;model=ATLAS&amp;xi=8'</pre>
     <p class="mb-2" style="color:#4c555d;">Returns u<sub>1</sub>, u<sub>2</sub> from the 8 km/s ATLAS table, with <code>"xi": 8.0</code> in the response.
     ATLAS and solar metallicity only; the prefixed path is required.</p>
+
+    <h3>Compute for a JWST mode</h3>
+    <pre class="code">GET https://sco-ldc.com/power2/api/compute?teff=5800&amp;logg=4.5&amp;feh=0.0&amp;filter=PRISM&amp;model=PHOENIX-NE
+<span class="prompt">$</span> curl 'https://sco-ldc.com/power2/api/compute?teff=5800&amp;logg=4.5&amp;feh=0.0&amp;filter=PRISM&amp;model=PHOENIX-NE'</pre>
+    <p class="mb-2" style="color:#4c555d;">Returns g, h for NIRSpec PRISM from the Claret, Hauschildt &amp; Torres (2025) table, with
+    <code>"xi": 1.0</code> in the response although no velocity was asked for (the single-velocity rule), <code>"model": "PHOENIX-NE"</code>,
+    <code>"edge_point_applied": true</code>, and h<sub>1</sub>&prime;, h<sub>2</sub>&prime; derived with the edge-point rescaling.
+    <code>/fourparam/api/compute?&hellip;</code> with the same parameters returns a<sub>1</sub>&ndash;a<sub>4</sub>. PHOENIX-NE and the
+    JWST codes are refused on the quadratic prefix and unknown on the unprefixed alias.</p>
 
     <h3>Discover what exists at a velocity</h3>
     <pre class="code">GET https://sco-ldc.com/power2/api/filters?xi=4

@@ -21,6 +21,13 @@ Three things are asserted for every point:
     combinations Maxted measured, at the default velocity only, and absent
     everywhere else -- absent, not null, so a caller can test for the key.
 
+Since Phase 3 the enumeration covers every velocity, not just 2 km/s, so that
+the JWST tables (PHOENIX-NE, 1 km/s only) are checked: they carry an edge
+point, so the correction flag must be true for every one of their points, and
+Maxted's empirical correction must be absent for all of them.  Two reference
+stars from the Phase 3 brief, read directly from the published tables and
+worked through the arithmetic specification by hand, are asserted exactly.
+
 Run as part of run_all.py.  Exit code 0 means no discrepancies.
 """
 import argparse, json, math, os, sys, time
@@ -46,6 +53,18 @@ EXPECT_CORRECTION = {
     ("quad", "TESS", "PHOENIX-COND"),
 }
 DEFAULT_XI = 2.0
+ALL_XI = (0.0, 1.0, 2.0, 4.0, 8.0)
+
+# Reference values from "Phase 3 Brief: JWST Coverage" (4 October 2026): a
+# Sun-like star at 5800 K, log g 4.5, read directly from the published tables
+# and converted by hand through the Maxted specification, with the edge-point
+# correction applied.  Four decimals, as the brief quotes them.
+REFERENCE = {
+    ("power2",    "PRISM"): (0.9115, 0.1138),
+    ("fourparam", "PRISM"): (0.9123, 0.1170),
+    ("power2",    "SOSS2"): (0.8598, 0.1655),
+    ("fourparam", "SOSS2"): (0.8605, 0.1685),
+}
 
 
 def profile(law, body, mu):
@@ -64,6 +83,8 @@ for law in a.laws.split(","):
     core, app = load_engine(a.v5, law)
     n = n_diff = 0
     with_corr = with_edge = 0
+    non_realizable = 0          # points (nodes included) whose profile no real star could have
+    non_realizable_examples = []
     examples = []
 
     def fail(point, why, detail=None):
@@ -72,8 +93,17 @@ for law in a.laws.split(","):
         if len(examples) < a.examples:
             examples.append({"point": point, "why": why, "detail": detail})
 
-    for p in enumerate_points(core, xi_filter=DEFAULT_XI,
-                              kinds=tuple(a.kinds.split(","))):
+    # --- the reference stars, exact to the four decimals the brief quotes
+    for (rlaw, code), (want1, want2) in REFERENCE.items():
+        if rlaw != law:
+            continue
+        status, body = call_compute(app, core, dict(teff=5800.0, logg=4.5, feh=0.0, filter=code, model="PHOENIX-NE", xi=1.0), True)
+        if status != 200 or round(body["h1_prime"], 4) != want1 or round(body["h2_prime"], 4) != want2:
+            fail({"reference": code}, "a reference star from the Phase 3 brief does not reproduce",
+                 {"status": status, "served": None if status != 200 else [body["h1_prime"], body["h2_prime"]], "brief": [want1, want2]})
+
+    for p in (q for xi in ALL_XI
+                for q in enumerate_points(core, xi_filter=xi, kinds=tuple(a.kinds.split(",")))):
         status, body = call_compute(app, core, p, True)
         if status != 200:
             continue
@@ -102,6 +132,26 @@ for law in a.laws.split(","):
         mu1, mu2 = 1.0 - k / 3.0, 1.0 - 2.0 * k / 3.0
         want1 = profile(law, body, mu1)
         want2 = want1 - profile(law, body, mu2)
+        # The served mu_cri is rounded to six decimals, so the oracle sees it
+        # with an error of up to half a unit in that place.  For an ordinary
+        # star that moves the result by less than 1e-7 and is invisible under
+        # the tolerance below.  Where the published power-2 fit is degenerate
+        # (g in the hundreds with h near zero, which the JWST F322W2 table has
+        # at 2700-2900 K, log g 3.0) the interpolated profile is wildly steep
+        # and the same half unit moves the result by several 1e-6.  So the
+        # oracle is evaluated at mu_cri plus and minus that half unit and the
+        # served value must lie within the band they span.  This is a check
+        # on the arithmetic only; whether such a profile means anything is
+        # reported separately below, not failed.
+        if mc is not None:
+            band1, band2 = [want1], [want2]
+            for m in (mc - 5e-7, mc + 5e-7):
+                kk = 1.0 - m
+                w1 = profile(law, body, 1.0 - kk / 3.0)
+                band1.append(w1); band2.append(w1 - profile(law, body, 1.0 - 2.0 * kk / 3.0))
+            lo1, hi1, lo2, hi2 = min(band1), max(band1), min(band2), max(band2)
+        else:
+            lo1 = hi1 = want1; lo2 = hi2 = want2
         # The served value is rounded to six decimals, so it may differ from an
         # independent evaluation by up to one unit in that place.  Two earlier
         # attempts at this comparison were wrong and are recorded so they are
@@ -111,14 +161,32 @@ for law in a.laws.split(","):
         # two sides of a half-way point in opposite directions.  One unit in
         # the last served place is the honest bound, and it is still four
         # orders of magnitude finer than the 0.005 these values are measured to.
-        if abs(h1 - want1) > 1e-6 or abs(h2 - want2) > 1e-6:
+        if not (lo1 - 1e-6 <= h1 <= hi1 + 1e-6) or not (lo2 - 1e-6 <= h2 <= hi2 + 1e-6):
             fail(p, "a derived value disagrees with a direct evaluation",
                  {"served": [h1, h2], "direct": [want1, want2]})
             continue
 
-        # --- the empirical correction must appear only where it was measured
+        # --- information, not a failure: a profile no real star could have
+        #     (Short et al. 2019: h1' < 1 and 0 < h2' <= h1'), at a node or an
+        #     interpolated point.  The service reports it without comment
+        #     (decision, 24 Sept 2026); this layer counts the cases so that a
+        #     table's behaviour is seen.  Most of the four-parameter count is
+        #     the published Claret & Bloemen (2011) fits themselves, in the
+        #     Stromgren v and b bands (about 16 per cent of those nodes); the
+        #     power-2 count is a few cells next to degenerate fits.
+        if not (h1 < 1.0 and 0.0 < h2 <= h1):
+            non_realizable += 1
+            if len(non_realizable_examples) < 10:
+                non_realizable_examples.append({"point": p, "h1_prime": h1, "h2_prime": h2})
+
+        # --- a spherical table must always have applied the correction
+        if p["model"] in ("PHOENIX-COND", "PHOENIX-NE") and not applied:
+            fail(p, "a spherical table's point carries no edge point"); continue
+
+        # --- the empirical correction must appear only where it was measured,
+        #     and only at the default velocity
         key = (law, p["filter"], p["model"])
-        want_corr = key in EXPECT_CORRECTION
+        want_corr = key in EXPECT_CORRECTION and p["xi"] == DEFAULT_XI
         has_corr = "maxted_correction" in body
         if has_corr != want_corr:
             fail(p, "the empirical correction is served where it was not measured"
@@ -148,9 +216,12 @@ for law in a.laws.split(","):
 
     summary[law] = {"points": n, "discrepancies": n_diff,
                     "with_edge_point": with_edge, "with_correction": with_corr,
+                    "non_realizable": non_realizable,
+                    "non_realizable_examples": non_realizable_examples,
                     "seconds": round(time.time() - t0, 1), "examples": examples}
     print(f"layer 5, {law}: {n} points, {n_diff} discrepancies, "
           f"{with_edge} carried an edge point, {with_corr} carried a correction, "
+          f"{non_realizable} profiles no real star could have, nodes included (reported, not failed), "
           f"{summary[law]['seconds']} s")
     for e in examples[:3]:
         print("   e.g.", e)

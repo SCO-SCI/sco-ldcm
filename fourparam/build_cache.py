@@ -2,6 +2,9 @@ import os
 import time
 import sys
 
+# The engine imports from the repository's shared/ package, so the repository
+# root must be importable when this script is run from inside fourparam/.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import ldc_core
 
 
@@ -29,22 +32,27 @@ def main() -> int:
     print(f"wrote {cache_path} ({size_kb:.0f} KB)")
 
     
+    # Rows at every velocity the parsers keep: the CB2011 file at all five
+    # velocities since v5, the PHOENIX-COND files at 2 km/s only, and the JWST
+    # file at 1 km/s only (3,366 = 51 x 6 x 11).
     expected = {
-        "c11/tableeq5.dat": 177125,
+        "c11/tableeq5.dat": 220618,
         "c23/table4.dat":      823,
         "c23/table8.dat":      823,
         "c23/table12.dat":     823,
+        "c25/table2.dat":     3366,
     }
     for fname, want in expected.items():
         got = counts.get(fname)
         if got != want:
             print(f"ERROR: {fname} parsed {got} rows, expected {want} "
-                  f"(check the source file, the xi=2 km/s filter, and the "
+                  f"(check the source file, the velocity filter, and the "
                   f"Option B keep-rule).",
                   file=sys.stderr)
             return 1
     print("Four-parameter row counts verified "
-          "(CB2011 Option B = 177125; CS2023 Eq.3/M2 = 823 each).")
+          "(CB2011 Option B = 220618 at all velocities; CS2023 Eq.3/M2 = 823 each; "
+          "CHT25 = 3366).")
 
     t0 = time.perf_counter()
     counts2 = ldc_core.load_tables(data_dir, use_cache=True)

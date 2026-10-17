@@ -17,6 +17,10 @@ LEGACY_EDGE = [  # the legacy error and malformed-input paths, compared byte for
     "/api/compute?teff=5150&logg=4.4&feh=-0.05&filter=TESS&model=ATLAS", "/api/compute?teff=6000&logg=4.5&feh=0.3&filter=V&model=ATLAS",
     "/api/compute?teff=37500&logg=4.5&feh=0.0&filter=V&model=ATLAS", "/api/compute?teff=2000&logg=4.5&feh=0.0&filter=V&model=ATLAS",
     "/api/filters", "/api/filters?xi=8", "/api/resolve?planet=NOT-A-PLANET-XYZ", "/api/nonexistent",
+    # Phase 3: a JWST mode on the frozen route must still be "Unknown filter", not the
+    # cross-law message the prefixed quadratic route gives; and PHOENIX-NE must mean nothing here.
+    "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=PRISM&model=ATLAS",
+    "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=PHOENIX-NE",
 ]
 
 # The fields v5 adds to a prefixed compute response.  Kept in step with

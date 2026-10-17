@@ -53,6 +53,46 @@ def build_spec(core):
             for x in (0.0, 1.0, 4.0, 8.0):
                 spec.append(dict(case="phoenix_family_at_velocity", filter=f, model=label, xi=x, teff=t, logg=l, feh=0.0, expect=400, msg="published only at 2 km/s"))
             spec.append(dict(case="phoenix_family_at_2", filter=f, model=label, xi=2.0, teff=t, logg=l, feh=0.0, expect=200))
+    # The JWST modes (Phase 3): PHOENIX-NE, 1 km/s, solar, 2400-7800 K, log g 3.0-5.5.
+    # Four refusals, each naming what WOULD work, and the single-velocity rule: xi omitted
+    # is served at 1, xi=1 is served, every other velocity is refused by name.  "xi": None
+    # means the request omits the parameter (call_compute passes None; requests drops it).
+    jwst = sorted({f for (f, sm, xi) in grids if sm == "PHOENIX-NE"})
+    for f in jwst:
+        g = grids[(f, "PHOENIX-NE", 1.0)]; t, l = g["teffs"][len(g["teffs"])//2], g["loggs"][-1]
+        spec.append(dict(case="jwst_xi_omitted_served_at_1", filter=f, model="PHOENIX-NE", xi=None, teff=t, logg=l, feh=0.0, expect=200))
+        spec.append(dict(case="jwst_xi_1_served", filter=f, model="PHOENIX-NE", xi=1.0, teff=t, logg=l, feh=0.0, expect=200))
+        for x in (0.0, 2.0, 4.0, 8.0):
+            spec.append(dict(case="jwst_wrong_velocity", filter=f, model="PHOENIX-NE", xi=x, teff=t, logg=l, feh=0.0, expect=400, msg="published only at 1 km/s"))
+        for m in ("ATLAS", "PHOENIX", "PHOENIX-COND"):
+            spec.append(dict(case="jwst_wrong_model", filter=f, model=m, xi=None, teff=t, logg=l, feh=0.0, expect=400, msg="available only with the PHOENIX-NE model"))
+        for z in (-0.5, 0.3):
+            spec.append(dict(case="jwst_wrong_composition", filter=f, model="PHOENIX-NE", xi=None, teff=t, logg=l, feh=z, expect=400, msg="solar metallicity only"))
+        for (tt, ll, frag) in ((2300.0, 4.5, "below 2400 K"), (7900.0, 4.5, "above 7800 K"), (5800.0, 2.5, "below 3.0"), (5800.0, 6.0, "above 5.5")):
+            spec.append(dict(case="jwst_outside_grid", filter=f, model="PHOENIX-NE", xi=None, teff=tt, logg=ll, feh=0.0, expect=400, msg=frag))
+        # the 200 K steps above 7000 K interpolate between real nodes, and never refuse
+        for tt in (7100.0, 7300.0, 7500.0, 7700.0):
+            spec.append(dict(case="jwst_200K_steps_interpolate", filter=f, model="PHOENIX-NE", xi=None, teff=tt, logg=l, feh=0.0, expect=200))
+    # the existing models must never be reached under a JWST label: PHOENIX-NE on an ordinary
+    # filter is refused.  The two engines that hold JWST tables name the models the filter does
+    # have; the quadratic engine keeps its original wording, which the frozen route depends on.
+    frag = "no data for filter" if hasattr(core, "served_by_another_law") else "available only with the"
+    for f in sorted({f for (f, sm, xi) in grids if sm == "PHOENIX"})[:3]:
+        spec.append(dict(case="phoenix_ne_on_ordinary_filter", filter=f, model="PHOENIX-NE", xi=None, teff=5800.0, logg=4.5, feh=0.0, expect=400, msg=frag))
+    return spec
+
+
+# The quadratic law holds no JWST table.  Its prefixed route must say where the modes ARE
+# served; its frozen unprefixed route is covered by layer 1 live (LEGACY_EDGE).
+JWST_CODES = ("F210M", "F322W2", "F444W", "SOSS1", "SOSS2", "F277W", "G235H", "G235M", "G395H", "G395M", "PRISM")
+def build_cross_law_spec(core):
+    spec = []
+    if any(sm == "PHOENIX-NE" for (_, sm, _) in (table_key_parts(k) for k in core._TABLES)):
+        return spec   # this law holds them
+    # the exact sentence decided on 10 October 2026 (E. Mullen), code substituted
+    for f in JWST_CODES:
+        spec.append(dict(case="jwst_wrong_law", filter=f, model="ATLAS", xi=None, teff=5800.0, logg=4.5, feh=0.0, expect=400,
+                         msg=f"{f} \u2014 the JWST modes are served under the power-2 and four-parameter laws only."))
     return spec
 
 def check(status, body, c):
@@ -66,7 +106,7 @@ ap.add_argument("--live-per-case", type=int, default=6); ap.add_argument("--rate
 a = ap.parse_args(); os.makedirs(a.results, exist_ok=True)
 summary = {}
 for law in a.laws.split(","):
-    core, app = load_engine(a.v5, law); spec = build_spec(core)
+    core, app = load_engine(a.v5, law); spec = build_spec(core) + build_cross_law_spec(core)
     by = {}; bad = []
     for c in spec:
         status, body = call_compute(app, core, c, True)

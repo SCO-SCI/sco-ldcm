@@ -30,17 +30,30 @@ for law in a.laws.split(","):
         e, s = expected[k], seen[k]
         for fld in ("teff_min","teff_max","logg_min","logg_max","feh_min","feh_max","feh_fixed","n_points","model_key"):
             if s.get(fld) != e[fld]: problems.append(f"{k} {fld}: service {s.get(fld)} vs code {e[fld]}")
-    # filters catalog at each velocity must be the capabilities restricted to that velocity
-    for xi in (0,1,2,4,8):
-        code, text = query_live(f"{a.base}/{law}/api/filters", {"xi": xi} if xi != 2 else {})
-        if code != 200: problems.append(f"filters?xi={xi} HTTP {code}"); continue
+    # filters catalog at each velocity must be the capabilities restricted to that velocity.
+    # Since Phase 3 the velocity is sent explicitly even for 2: a request that OMITS xi is
+    # a different catalogue (checked next), by the single-velocity rule.
+    def check_catalog(label, params, want):
+        code, text = query_live(f"{a.base}/{law}/api/filters", params)
+        if code != 200: problems.append(f"{label} HTTP {code}"); return
         fl = json.loads(text)["filters"]
         got = {(f["code"], m["model"]): m for f in fl for m in f["models"]}
-        want = {(k[0], k[1]): v for k, v in expected.items() if k[2] == float(xi)}
-        if set(got) != set(want): problems.append(f"filters?xi={xi}: entries differ: only-service {sorted(set(got)-set(want))[:5]} only-code {sorted(set(want)-set(got))[:5]}")
+        if set(got) != set(want): problems.append(f"{label}: entries differ: only-service {sorted(set(got)-set(want))[:5]} only-code {sorted(set(want)-set(got))[:5]}")
         for k in set(got) & set(want):
             if got[k]["n_points"] != want[k]["n_points"] or got[k]["teff_min"] != want[k]["teff_min"] or bool(got[k]["feh_fixed"]) != want[k]["feh_fixed"]:
-                problems.append(f"filters?xi={xi} {k}: {got[k]['n_points']}/{got[k]['teff_min']}/{got[k]['feh_fixed']} vs {want[k]['n_points']}/{want[k]['teff_min']}/{want[k]['feh_fixed']}")
+                problems.append(f"{label} {k}: {got[k]['n_points']}/{got[k]['teff_min']}/{got[k]['feh_fixed']} vs {want[k]['n_points']}/{want[k]['teff_min']}/{want[k]['feh_fixed']}")
+    for xi in (0,1,2,4,8):
+        check_catalog(f"filters?xi={xi}", {"xi": xi}, {(k[0], k[1]): v for k, v in expected.items() if k[2] == float(xi)})
+    # the catalogue with xi omitted: every (filter, model) at 2 km/s, plus every (filter, model)
+    # that exists at exactly one velocity other than 2 -- the JWST modes at 1 km/s -- which a
+    # compute request omitting xi is served at (the single-velocity rule)
+    by_fm = {}
+    for (f, m, xi) in expected: by_fm.setdefault((f, m), set()).add(xi)
+    want_omitted = {}
+    for (f, m), xis in by_fm.items():
+        v = 2.0 if 2.0 in xis else (next(iter(xis)) if len(xis) == 1 else None)
+        if v is not None: want_omitted[(f, m)] = expected[(f, m, v)]
+    check_catalog("filters (xi omitted)", {}, want_omitted)
     summary[law] = {"grids_in_code": len(expected), "grids_advertised": len(seen), "problems": problems}
     print(f"layer 3, {law}: {len(expected)} grids in code, {len(seen)} advertised, {len(problems)} problems" + (f"  e.g. {problems[:2]}" if problems else ""))
 json.dump(summary, open(os.path.join(a.results, "layer3_catalog.json"), "w"), indent=1)

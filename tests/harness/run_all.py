@@ -3,8 +3,10 @@
   python run_all.py --v4 <checkout of main> --v5 <checkout of v5> [--only local|live]
 
 Layers: 1 local (v4 vs v5 code, every point), 2 velocity (rows and oracle),
-3 catalog (advertised vs held), 4 refusals (spec vs code, sampled live),
-1 live (production vs test service on a sample; legacy routes byte for byte).
+5 derived (the Phase 2 fields), 6 page (the dropdown evaluator, exhaustively;
+needs node or pip install mini-racer), 3 catalog (advertised vs held),
+4 refusals (spec vs code, sampled live), 1 live (production vs test service
+on a sample; legacy routes byte for byte).
 Exit 0 only when every layer reports zero discrepancies."""
 import argparse, json, os, subprocess, sys, datetime
 here = os.path.dirname(os.path.abspath(__file__))
@@ -17,7 +19,8 @@ steps = []
 if a.only in ("local", "all"):
     steps += [("layer1_local", ["layer1_local.py", "--v4", a.v4, "--v5", a.v5]),
               ("layer2_velocity", ["layer2_velocity.py", "--v5", a.v5]),
-              ("layer5_derived", ["layer5_derived.py", "--v5", a.v5])]
+              ("layer5_derived", ["layer5_derived.py", "--v5", a.v5]),
+              ("layer6_page", ["layer6_page.py", "--v5", a.v5])]
 if a.only in ("live", "all"):
     steps += [("layer3_catalog", ["layer3_catalog.py", "--v5", a.v5, "--base", a.test]),
               ("layer4_refusals", ["layer4_refusals.py", "--v5", a.v5, "--live", a.test]),
@@ -30,7 +33,7 @@ for name, cmd in steps:
     if r.returncode not in (0, 2): print(r.stderr[-1500:])
 # assemble
 summary = {"run_utc": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"), "v4": a.v4, "v5": a.v5, "prod": a.prod, "test": a.test, "exit_codes": codes, "layers": {}}
-for name in ("layer1_local", "layer2_velocity", "layer5_derived", "layer3_catalog", "layer4_refusals", "layer1_live"):
+for name in ("layer1_local", "layer2_velocity", "layer5_derived", "layer6_page", "layer3_catalog", "layer4_refusals", "layer1_live"):
     p = os.path.join(a.results, name + ".json")
     if os.path.exists(p): summary["layers"][name] = json.load(open(p))
 json.dump(summary, open(os.path.join(a.results, "summary.json"), "w"), indent=1)
@@ -39,10 +42,22 @@ if "layer1_local" in L:
     lines.append("## Layer 1, local: v4 code vs v5 code, every node, cell centre and random interior point at 2 km/s")
     for law, v in L["layer1_local"].items(): lines.append(f"- {law}: {v['points']} points, {v['discrepancies']} discrepancies")
 if "layer5_derived" in L:
-    lines += ["## Layer 5 — the fields Phase 2 added", ""]
+    lines += ["## Layer 5 — the fields Phase 2 added, at every velocity, plus the Phase 3 reference stars", ""]
     for law, v in L["layer5_derived"].items():
         lines.append(f"- {law}: {v['points']} points, {v['discrepancies']} discrepancies, "
-                     f"{v['with_edge_point']} with an edge point, {v['with_correction']} with a correction")
+                     f"{v['with_edge_point']} with an edge point, {v['with_correction']} with a correction, "
+                     f"{v.get('non_realizable', 0)} profiles no real star could have, nodes included (reported, not failed)")
+    lines.append("")
+if "layer6_page" in L:
+    lines += ["## Layer 6 — the page's dropdown evaluator, exhaustively, without a browser", ""]
+    for law in ("quad", "power2", "fourparam"):
+        v = L["layer6_page"].get(law)
+        if not v: continue
+        nf = sum(v["failures"].values())
+        lines.append(f"- {law}: {v['discrete_states'] + v['typed_states']} states, {v['tags']} tags ({v['distinct_tags']} distinct), "
+                     f"{v['transitions']} transitions, deepest settle {v['deepest_settle']}, "
+                     f"{v['order_reachable']} of {v['order_targets']} combinations reachable from the default state, {nf} failures")
+    lines.append(f"  (engine: {L['layer6_page'].get('engine')}; scoEvaluate md5 {L['layer6_page'].get('extracted', {}).get('scoEvaluate', {}).get('md5')})")
     lines.append("")
 if "layer2_velocity" in L:
     lines.append("## Layer 2: velocity tables, nodes vs table rows and interior points vs independent oracle")

@@ -200,9 +200,11 @@ def health() -> dict:
 
 @app.get("/api/filters")
 def filters(
-    xi: float = Query(ldc_core.DEFAULT_XI,
-                      description="Microturbulent velocity in km/s "
-                                  "(0, 1, 2, 4 or 8; default 2)"),
+    xi: Optional[float] = Query(None,
+                                description="Microturbulent velocity in km/s "
+                                            "(0, 1, 2, 4 or 8). Omitted: each "
+                                            "table at 2, or at the one velocity "
+                                            "it has (the JWST modes, at 1)."),
 ) -> dict:
     
     return {"filters": ldc_core.get_available_filters(xi)}
@@ -215,6 +217,31 @@ def capabilities() -> dict:
     return {"capabilities": ldc_core.get_capabilities()}
 
 
+def _compute(teff: float, logg: float, feh: float, filter: str, model: str,
+             xi: Optional[float], name_other_laws: bool) -> dict:
+    """The one implementation behind both compute routes.
+
+    ``name_other_laws`` is the only difference between them.  The prefixed
+    route answers a request for a filter this law does not hold but another
+    law does -- the JWST modes, served under power-2 and four-parameter -- by
+    saying where it IS served.  The frozen unprefixed route must keep the
+    "Unknown filter" wording it has always returned, so compute_legacy passes
+    False.  Everything else, including the numbers, is identical by
+    construction: there is one code path.
+    """
+    try:
+        return ldc_core.compute_ldcs(teff, logg, feh, filter, model, xi)
+    except ldc_core.UnknownFilter as e:
+        detail = str(e)
+        if name_other_laws:
+            elsewhere = ldc_core.served_by_another_law(filter)
+            if elsewhere is not None:
+                detail = elsewhere
+        raise HTTPException(status_code=400, detail=detail)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.get("/api/compute")
 def compute(
     teff: float = Query(..., description="Effective temperature in K"),
@@ -222,20 +249,29 @@ def compute(
     feh:  float = Query(0.0, description="Metallicity [Fe/H] in dex (solar=0.0)"),
     filter: str = Query(..., alias="filter", description="Filter code (e.g. 'V', 'Kp', 'TESS', 'CBB')"),
     model:  str = Query("ATLAS", description="Stellar atmosphere model: ATLAS, PHOENIX, or PHOENIX-COND"),
-    xi:     float = Query(ldc_core.DEFAULT_XI,
-                          description="Microturbulent velocity in km/s "
-                                      "(0, 1, 2, 4 or 8; default 2). Any value "
-                                      "other than 2 is ATLAS only."),
+    xi:     Optional[float] = Query(None,
+                                    description="Microturbulent velocity in km/s "
+                                                "(0, 1, 2, 4 or 8). Omitted: 2, or the "
+                                                "one velocity the chosen table has. Any "
+                                                "value other than 2 is ATLAS only."),
 ) -> dict:
     
-    try:
-        result = ldc_core.compute_ldcs(teff, logg, feh, filter, model, xi)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    # Self-describing: state which velocity produced these numbers.
-    # The legacy unprefixed route strips this key -- see parent_app.
-    result["xi"] = ldc_core._norm_xi(xi)
-    return result
+    # The response carries the velocity that produced these numbers in its
+    # "xi" field, set by the engine.  The legacy unprefixed route strips
+    # it -- see parent_app.
+    return _compute(teff, logg, feh, filter, model, xi, name_other_laws=True)
+
+
+def compute_legacy(teff: float, logg: float, feh: float, filter: str,
+                   model: str, xi: float) -> dict:
+    """What the frozen unprefixed /api/compute calls (see parent_app).
+
+    Identical to compute() except that a filter this law does not hold is
+    reported exactly as it always has been -- "Unknown filter: 'X'" -- even
+    when another law serves it.  Not a route: parent_app registers its own
+    wrapper, with the pre-velocity parameters only, and calls this.
+    """
+    return _compute(teff, logg, feh, filter, model, xi, name_other_laws=False)
 
 
 @app.get("/api/resolve")

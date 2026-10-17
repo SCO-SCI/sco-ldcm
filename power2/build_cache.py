@@ -2,6 +2,9 @@ import os
 import time
 import sys
 
+# The engine imports from the repository's shared/ package, so the repository
+# root must be importable when this script is run from inside power2/.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import ldc_core
 
 
@@ -29,24 +32,29 @@ def main() -> int:
     print(f"wrote {cache_path} ({size_kb:.0f} KB)")
 
     
+    # Rows at every velocity the parsers keep: the ATLAS files at all five
+    # velocities since v5 (9,586 = 7,695 at 2 km/s plus the solar rows at
+    # 0, 1, 4 and 8), the PHOENIX-COND files at 2 km/s only, and the JWST
+    # file at 1 km/s only (3,366 = 51 x 6 x 11).
     expected = {
-        "c22/table1.dat":    7695,
-        "c22/table2.dat":    7695,
-        "c22/table3.dat":    7695,
+        "c22/table1.dat":    9586,
+        "c22/table2.dat":    9586,
+        "c22/table3.dat":    9586,
         "c23/table2.dat":     823,
         "c23/table6.dat":     823,
         "c23/table10.dat":    823,
-        "cbb/cbbpower2.txt": 7695,
+        "cbb/cbbpower2.txt": 9586,
+        "c25/table3.dat":    3366,
     }
     for fname, want in expected.items():
         got = counts.get(fname)
         if got != want:
             print(f"ERROR: {fname} parsed {got} rows, expected {want} "
-                  f"(check the source file and the xi=2 km/s filter).",
+                  f"(check the source file and the velocity filter).",
                   file=sys.stderr)
             return 1
     print("Power-2 row counts verified "
-          "(CS22 + CBB = 7695 each, CS23 = 823 each, at xi=2 km/s).")
+          "(CS22 + CBB = 9586 each, CS23 = 823 each, CHT25 = 3366).")
 
     t0 = time.perf_counter()
     counts2 = ldc_core.load_tables(data_dir, use_cache=True)

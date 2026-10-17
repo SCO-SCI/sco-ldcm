@@ -4,6 +4,8 @@ import os
 from bisect import bisect_left
 from typing import Dict, List, Optional, Tuple
 
+from shared import jwst_modes as _jwst
+
 
 FILTER_REGISTRY: List[Dict] = [
     # Johnson-Cousins
@@ -392,25 +394,88 @@ def load_tables(data_dir: str, use_cache: bool = True) -> Dict[str, int]:
 
 
 
-def _resolve_table_key(filter_code: str, model: str,
-                       xi: float = DEFAULT_XI) -> Tuple[str, str, float, str]:
-    
+class UnknownFilter(ValueError):
+    """A filter code this law does not hold.  The message is the one the
+    service has always given; the class exists so that the prefixed route
+    can recognise the case and, for a code another law serves, say so."""
+
+
+# Filters this law does not hold but another law does.  The quadratic engine
+# carries no JWST table, deliberately: Claret published none, arguing in
+# section 4 of the 2025 paper that the quadratic law fits the spherical
+# models poorly and does not conserve flux.  A request for one of these codes
+# is refused on the prefixed route with a message that names the laws that do
+# serve it.  The frozen unprefixed route keeps the "Unknown filter" wording it
+# has always had (see app.compute_legacy).
+def served_by_another_law(filter_code: str) -> Optional[str]:
+    if filter_code in _jwst.CODES:
+        return (f"{filter_code} \u2014 the JWST modes are served under "
+                f"{_jwst.SERVED_UNDER} only.")
+    return None
+
+
+def _resolve_source_model(filter_code: str, model: str) -> Tuple[str, str]:
+    """The source tag and storage model a request refers to.
+
+    PHOENIX-COND is a display label attached to the PHOENIX storage key, so
+    the two names reach the same table.  (The JWST tables' PHOENIX-NE is a
+    separate key in the two engines that hold them; this engine holds none.)
+    """
     entry = None
     for f in FILTER_REGISTRY:
         if f["code"] == filter_code:
             entry = f
             break
     if entry is None:
-        raise ValueError(f"Unknown filter: {filter_code!r}")
+        raise UnknownFilter(f"Unknown filter: {filter_code!r}")
     source = entry["source"]
 
-    
     if model.upper() == "PHOENIX-COND":
         storage_model = "PHOENIX"
     else:
         storage_model = model.upper()
 
+    return source, storage_model
+
+
+def _resolve_table_key(filter_code: str, model: str,
+                       xi: float = DEFAULT_XI) -> Tuple[str, str, float, str]:
+    
+    source, storage_model = _resolve_source_model(filter_code, model)
     return (source, filter_code, _norm_xi(xi), storage_model)
+
+
+def _velocities_held(source: str, filter_code: str, storage_model: str) -> List[float]:
+    """The velocities at which this filter and model have a table, ascending."""
+    return [v for v in SUPPORTED_XI
+            if (source, filter_code, _norm_xi(v), storage_model) in _TABLES]
+
+
+def _resolve_xi(source: str, filter_code: str, storage_model: str,
+                xi: Optional[float]) -> float:
+    """The velocity a request is served at.
+
+    THE SINGLE-VELOCITY RULE (decision, E. Mullen, 4 October 2026).  A caller
+    who does not name a velocity gets the default, 2 km/s, wherever the chosen
+    table has one.  Where the chosen table exists at exactly one velocity and
+    that velocity is not the default, it is used without being asked.  Every
+    table this engine holds exists at 2 km/s, so here the rule always gives
+    the default; it is implemented in all three engines so that they behave
+    alike.  (The power-2 and four-parameter engines' JWST tables exist only at
+    1 km/s, which is what the rule was written for.)  A velocity the caller
+    DOES name is honoured as given, and refused if the table is not published
+    at it.
+    """
+    if xi is not None:
+        return _norm_xi(xi)
+    held = _velocities_held(source, filter_code, storage_model)
+    if DEFAULT_XI in held or len(held) != 1:
+        return DEFAULT_XI
+    return held[0]
+
+
+def _velocity_list(values: List[float]) -> str:
+    return ", ".join(f"{v:g}" for v in values)
 
 
 def get_capabilities() -> List[Dict]:
@@ -458,15 +523,23 @@ def get_capabilities() -> List[Dict]:
     return out
 
 
-def get_available_filters(xi: float = DEFAULT_XI) -> List[Dict]:
-    
+def get_available_filters(xi: Optional[float] = None) -> List[Dict]:
+    """The filters catalogue at one velocity.
+
+    With ``xi`` given, lists the models that have a table at exactly that
+    velocity.  With ``xi`` omitted, lists each model at the velocity a
+    compute request omitting xi would be served at (the single-velocity
+    rule, see _resolve_xi), which for every table this engine holds is
+    2 km/s.  The legacy wrapper in parent_app passes 2 explicitly.
+    """
     out: List[Dict] = []
     for f in FILTER_REGISTRY:
         code = f["code"]
         source = f["source"]
         models_present: List[Dict] = []
         for storage_model in EXPECTED_MODELS[source]:
-            grid = _TABLES.get((source, code, _norm_xi(xi), storage_model))
+            v = _resolve_xi(source, code, storage_model, xi)
+            grid = _TABLES.get((source, code, v, storage_model))
             if grid is None:
                 continue
             teffs = grid["teffs"]   # type: ignore[index]
@@ -759,27 +832,36 @@ def aux_at(teff: float, logg: float, feh: float,
 
 def compute_ldcs(teff: float, logg: float, feh: float,
                  filter_code: str, model: str,
-                 xi: float = DEFAULT_XI
+                 xi: Optional[float] = None
                  ) -> Dict[str, object]:
     
-    xi = _norm_xi(xi)
-    if xi not in SUPPORTED_XI:
-        allowed = ", ".join(f"{v:g}" for v in SUPPORTED_XI)
-        raise ValueError(
-            f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
-            f"coefficients are published only at {allowed} km/s.")
+    # A velocity the caller names must be one Claret published at all.  This
+    # is checked before anything else, as it always was, so that the order of
+    # the refusals a caller can meet is unchanged.
+    if xi is not None:
+        xi = _norm_xi(xi)
+        if xi not in SUPPORTED_XI:
+            allowed = _velocity_list(list(SUPPORTED_XI))
+            raise ValueError(
+                f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
+                f"coefficients are published only at {allowed} km/s.")
 
-    table_key = _resolve_table_key(filter_code, model, xi)
-    source, code, _xi, storage_model = table_key
+    source, storage_model = _resolve_source_model(filter_code, model)
+    xi = _resolve_xi(source, filter_code, storage_model, xi)
+    table_key = (source, filter_code, xi, storage_model)
+    code = filter_code
     grid = _TABLES.get(table_key)
     if grid is None:
         model_name = _display_model(filter_code, storage_model)
-        if xi != DEFAULT_XI and _TABLES.get(
-                (source, code, DEFAULT_XI, storage_model)) is not None:
+        held = _velocities_held(source, code, storage_model)
+        if held:
             raise ValueError(
                 f"Invalid Input (microturbulent velocity = {xi:g} km/s): "
                 f"the {model_name} table for filter {filter_code} is published "
-                f"only at {DEFAULT_XI:g} km/s.")
+                f"only at {_velocity_list(held)} km/s.")
+        # This engine serves the frozen unprefixed route, so the wording of
+        # this refusal is part of the legacy contract and is not improved
+        # here as it was in the other two engines.
         raise ValueError(
             f"no data for filter {filter_code!r} with model {model!r}")
 
@@ -938,4 +1020,9 @@ def compute_ldcs(teff: float, logg: float, feh: float,
             "fractions":    {"teff": tT, "logg": tG, "feh": tZ},
             "on_grid":      (tT == 0.0 and tG == 0.0 and tZ == 0.0),
         },
+        # The velocity these numbers came from: what the caller asked for, or
+        # what the single-velocity rule chose when the caller asked for none.
+        # Present on the prefixed route only; parent_app strips it from the
+        # frozen unprefixed route (LEGACY_WITHHELD).
+        "xi": xi,
     }
