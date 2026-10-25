@@ -1,10 +1,14 @@
 {
- "run_utc": "2026-09-11 05:12 UTC",
- "v4": "/home/claude/v4",
- "v5": "/home/claude/v5",
+ "run_utc": "2026-10-15 11:01 UTC (local layers, on Ed's computer) and 2026-10-18 10:14 UTC (live layers, against staging)",
+ "v4": "main at 4c4eae5 (layer 1 local, on Ed's computer)",
+ "v5": "v5 at 271bff7: Ed's checkout on 15 October, before the commit, for the local layers; a fresh clone from GitHub on 18 October for the live layers",
  "prod": "https://sco-ldc.com",
  "test": "https://sco-ldcm.onrender.com",
  "exit_codes": {
+  "layer1_local": 0,
+  "layer2_velocity": 0,
+  "layer5_derived": 0,
+  "layer6_page": 0,
   "layer3_catalog": 0,
   "layer4_refusals": 0,
   "layer1_live": 0
@@ -19,7 +23,7 @@
      "random": 135774
     },
     "discrepancies": 0,
-    "seconds": 41.3,
+    "seconds": 100.2,
     "examples": []
    },
    "power2": {
@@ -30,7 +34,7 @@
      "random": 139104
     },
     "discrepancies": 0,
-    "seconds": 41.2,
+    "seconds": 113.5,
     "examples": []
    },
    "fourparam": {
@@ -41,7 +45,7 @@
      "random": 139206
     },
     "discrepancies": 0,
-    "seconds": 44.1,
+    "seconds": 110.3,
     "examples": []
    }
   },
@@ -69,7 +73,7 @@
       "failures": 0
      }
     },
-    "seconds": 24.8,
+    "seconds": 57.3,
     "examples": []
    },
    "power2": {
@@ -79,7 +83,7 @@
       "failures": 0
      },
      "xi=1": {
-      "points": 29463,
+      "points": 38329,
       "failures": 0
      },
      "xi=2": {
@@ -95,7 +99,7 @@
       "failures": 0
      }
     },
-    "seconds": 24.2,
+    "seconds": 73.1,
     "examples": []
    },
    "fourparam": {
@@ -105,7 +109,7 @@
       "failures": 0
      },
      "xi=1": {
-      "points": 29463,
+      "points": 38329,
       "failures": 0
      },
      "xi=2": {
@@ -121,8 +125,551 @@
       "failures": 0
      }
     },
-    "seconds": 26.4,
+    "seconds": 63.6,
     "examples": []
+   }
+  },
+  "layer5_derived": {
+   "quad": {
+    "points": 592234,
+    "discrepancies": 0,
+    "with_edge_point": 2898,
+    "with_correction": 19885,
+    "non_realizable": 0,
+    "non_realizable_examples": [],
+    "seconds": 42.7,
+    "examples": []
+   },
+   "power2": {
+    "points": 597597,
+    "discrepancies": 0,
+    "with_edge_point": 61421,
+    "with_correction": 0,
+    "non_realizable": 20,
+    "non_realizable_examples": [
+     {
+      "point": {
+       "filter": "H",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "kind": "random",
+       "teff": 37947.2691,
+       "logg": 4.2392,
+       "feh": 0.0
+      },
+      "h1_prime": 0.622671,
+      "h2_prime": 0.634809
+     },
+     {
+      "point": {
+       "filter": "H",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "kind": "center",
+       "teff": 38500.0,
+       "logg": 4.25,
+       "feh": 0.0
+      },
+      "h1_prime": 0.568227,
+      "h2_prime": 0.728199
+     },
+     {
+      "point": {
+       "filter": "H",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "kind": "center",
+       "teff": 39500.0,
+       "logg": 4.25,
+       "feh": 0.0
+      },
+      "h1_prime": 0.594974,
+      "h2_prime": 0.68635
+     },
+     {
+      "point": {
+       "filter": "H",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "kind": "random",
+       "teff": 39308.3208,
+       "logg": 4.2963,
+       "feh": 0.0
+      },
+      "h1_prime": 0.59588,
+      "h2_prime": 0.683123
+     },
+     {
+      "point": {
+       "filter": "K",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "kind": "center",
+       "teff": 37500.0,
+       "logg": 4.25,
+       "feh": 0.0
+      },
+      "h1_prime": 0.517702,
+      "h2_prime": 0.814127
+     },
+     {
+      "point": {
+       "filter": "K",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "kind": "random",
+       "teff": 37345.054,
+       "logg": 4.2687,
+       "feh": 0.0
+      },
+      "h1_prime": 0.534225,
+      "h2_prime": 0.784765
+     },
+     {
+      "point": {
+       "filter": "K",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "kind": "center",
+       "teff": 38500.0,
+       "logg": 4.25,
+       "feh": 0.0
+      },
+      "h1_prime": 0.575833,
+      "h2_prime": 0.719714
+     },
+     {
+      "point": {
+       "filter": "F322W2",
+       "model": "PHOENIX-NE",
+       "xi": 1.0,
+       "kind": "center",
+       "teff": 2650.0,
+       "logg": 3.25,
+       "feh": 0.0
+      },
+      "h1_prime": -5.942449,
+      "h2_prime": 10.697519
+     },
+     {
+      "point": {
+       "filter": "F322W2",
+       "model": "PHOENIX-NE",
+       "xi": 1.0,
+       "kind": "random",
+       "teff": 2676.4373,
+       "logg": 3.0613,
+       "feh": 0.0
+      },
+      "h1_prime": -7.255367,
+      "h2_prime": 12.908623
+     },
+     {
+      "point": {
+       "filter": "F322W2",
+       "model": "PHOENIX-NE",
+       "xi": 1.0,
+       "kind": "center",
+       "teff": 2750.0,
+       "logg": 3.25,
+       "feh": 0.0
+      },
+      "h1_prime": -19.100763,
+      "h2_prime": 31.541175
+     }
+    ],
+    "seconds": 60.0,
+    "examples": []
+   },
+   "fourparam": {
+    "points": 597941,
+    "discrepancies": 0,
+    "with_edge_point": 61421,
+    "with_correction": 18329,
+    "non_realizable": 7309,
+    "non_realizable_examples": [
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3500.0,
+       "logg": 0.0,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 0.153762,
+      "h2_prime": 0.722064
+     },
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3500.0,
+       "logg": 0.5,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 0.204048,
+      "h2_prime": 0.672054
+     },
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3500.0,
+       "logg": 1.0,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 0.253173,
+      "h2_prime": 0.624145
+     },
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3500.0,
+       "logg": 1.5,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 0.31395,
+      "h2_prime": 0.564723
+     },
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3500.0,
+       "logg": 2.0,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 0.384795,
+      "h2_prime": 0.495602
+     },
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3500.0,
+       "logg": 4.5,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 1.021066,
+      "h2_prime": 0.032366
+     },
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3500.0,
+       "logg": 5.0,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 1.11818,
+      "h2_prime": -0.058945
+     },
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3750.0,
+       "logg": 0.0,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 0.158185,
+      "h2_prime": 0.746047
+     },
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3750.0,
+       "logg": 0.5,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 0.254673,
+      "h2_prime": 0.651647
+     },
+     {
+      "point": {
+       "filter": "b",
+       "model": "ATLAS",
+       "xi": 0.0,
+       "teff": 3750.0,
+       "logg": 1.0,
+       "feh": 0.0,
+       "kind": "node"
+      },
+      "h1_prime": 0.306833,
+      "h2_prime": 0.600875
+     }
+    ],
+    "seconds": 52.7,
+    "examples": []
+   }
+  },
+  "layer6_page": {
+   "engine": "mini-racer",
+   "page": "C:\\Users\\edkmu\\Desktop\\SCO-LDC_MAIN\\SCO-LDC_V5\\sco-ldcv5\\static\\index.html",
+   "page_md5": "bc54cce18420e935be6ae4fe7989075b",
+   "extracted": {
+    "scoEvaluate": {
+     "chars": 15177,
+     "lines": 292,
+     "md5": "da1d1d456941983267985d9bd74e5613"
+    },
+    "scoNoteKey": {
+     "chars": 72,
+     "lines": 3,
+     "md5": "8158dbef02ea327c8714b279672b4a05"
+    },
+    "scoShowNote": {
+     "chars": 388,
+     "lines": 8,
+     "md5": "8d0b5d0a7b0f4b5e4dc9be201f5c37c3"
+    },
+    "scoClearNote": {
+     "chars": 220,
+     "lines": 9,
+     "md5": "696fcd047dc0c431764f48840f20257c"
+    },
+    "scoNoteAfterRefresh": {
+     "chars": 5702,
+     "lines": 110,
+     "md5": "62ba14f94bfcca9c176dcd2014f30fea"
+    }
+   },
+   "quad": {
+    "filters": 26,
+    "models": [
+     "ATLAS",
+     "PHOENIX",
+     "PHOENIX-COND"
+    ],
+    "velocities": [
+     "0",
+     "1",
+     "2",
+     "4",
+     "8"
+    ],
+    "grids": 146,
+    "discrete_states": 1944,
+    "typed_states": 14904,
+    "tags": 212154,
+    "distinct_tags": 1081,
+    "transitions": 5749,
+    "notes_checked": 4327,
+    "deepest_settle": 3,
+    "xi_kept_on_filter_change": 233,
+    "xi_moved_on_filter_change": 100,
+    "order_targets": 146,
+    "order_reachable": 146,
+    "permitted_orders_histogram": {
+     "6": 146
+    },
+    "jwst": {},
+    "failures": {},
+    "examples": {},
+    "seconds": 55.9
+   },
+   "power2": {
+    "filters": 35,
+    "models": [
+     "ATLAS",
+     "PHOENIX-COND",
+     "PHOENIX-NE"
+    ],
+    "velocities": [
+     "0",
+     "1",
+     "2",
+     "4",
+     "8"
+    ],
+    "grids": 149,
+    "discrete_states": 2592,
+    "typed_states": 19872,
+    "tags": 392306,
+    "distinct_tags": 1912,
+    "transitions": 7321,
+    "notes_checked": 5918,
+    "deepest_settle": 3,
+    "xi_kept_on_filter_change": 577,
+    "xi_moved_on_filter_change": 1643,
+    "order_targets": 149,
+    "order_reachable": 149,
+    "permitted_orders_histogram": {
+     "6": 138,
+     "4": 11
+    },
+    "jwst": {
+     "F210M": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "F322W2": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "F444W": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "SOSS1": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "SOSS2": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "F277W": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "G235H": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "G235M": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "G395H": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "G395M": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     },
+     "PRISM": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 1
+     }
+    },
+    "failures": {},
+    "examples": {},
+    "seconds": 80.1
+   },
+   "fourparam": {
+    "filters": 39,
+    "models": [
+     "ATLAS",
+     "PHOENIX-COND",
+     "PHOENIX",
+     "PHOENIX-NE"
+    ],
+    "velocities": [
+     "0",
+     "1",
+     "2",
+     "4",
+     "8"
+    ],
+    "grids": 150,
+    "discrete_states": 3600,
+    "typed_states": 27600,
+    "tags": 642340,
+    "distinct_tags": 2898,
+    "transitions": 8056,
+    "notes_checked": 6652,
+    "deepest_settle": 3,
+    "xi_kept_on_filter_change": 888,
+    "xi_moved_on_filter_change": 2066,
+    "order_targets": 150,
+    "order_reachable": 150,
+    "permitted_orders_histogram": {
+     "6": 139,
+     "4": 11
+    },
+    "jwst": {
+     "F210M": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "F322W2": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "F444W": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "SOSS1": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "SOSS2": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "F277W": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "G235H": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "G235M": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "G395H": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "G395M": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     },
+     "PRISM": {
+      "passes": 3,
+      "kept_1kms": 23,
+      "moved": 5
+     }
+    },
+    "failures": {},
+    "examples": {},
+    "seconds": 106.8
    }
   },
   "layer3_catalog": {
@@ -132,13 +679,13 @@
     "problems": []
    },
    "power2": {
-    "grids_in_code": 138,
-    "grids_advertised": 138,
+    "grids_in_code": 149,
+    "grids_advertised": 149,
     "problems": []
    },
    "fourparam": {
-    "grids_in_code": 139,
-    "grids_advertised": 139,
+    "grids_in_code": 150,
+    "grids_advertised": 150,
     "problems": []
    }
   },
@@ -184,10 +731,18 @@
      "phoenix_family_at_2": {
       "cases": 21,
       "failures": 0
+     },
+     "phoenix_ne_on_ordinary_filter": {
+      "cases": 3,
+      "failures": 0
+     },
+     "jwst_wrong_law": {
+      "cases": 11,
+      "failures": 0
      }
     },
     "live": {
-     "requests": 60,
+     "requests": 69,
      "failures": 0,
      "examples": []
     },
@@ -234,10 +789,42 @@
      "phoenix_family_at_2": {
       "cases": 23,
       "failures": 0
+     },
+     "jwst_xi_omitted_served_at_1": {
+      "cases": 11,
+      "failures": 0
+     },
+     "jwst_xi_1_served": {
+      "cases": 11,
+      "failures": 0
+     },
+     "jwst_wrong_velocity": {
+      "cases": 44,
+      "failures": 0
+     },
+     "jwst_wrong_model": {
+      "cases": 33,
+      "failures": 0
+     },
+     "jwst_wrong_composition": {
+      "cases": 22,
+      "failures": 0
+     },
+     "jwst_outside_grid": {
+      "cases": 44,
+      "failures": 0
+     },
+     "jwst_200K_steps_interpolate": {
+      "cases": 44,
+      "failures": 0
+     },
+     "phoenix_ne_on_ordinary_filter": {
+      "cases": 3,
+      "failures": 0
      }
     },
     "live": {
-     "requests": 60,
+     "requests": 105,
      "failures": 0,
      "examples": []
     },
@@ -284,10 +871,42 @@
      "phoenix_family_at_2": {
       "cases": 24,
       "failures": 0
+     },
+     "jwst_xi_omitted_served_at_1": {
+      "cases": 11,
+      "failures": 0
+     },
+     "jwst_xi_1_served": {
+      "cases": 11,
+      "failures": 0
+     },
+     "jwst_wrong_velocity": {
+      "cases": 44,
+      "failures": 0
+     },
+     "jwst_wrong_model": {
+      "cases": 33,
+      "failures": 0
+     },
+     "jwst_wrong_composition": {
+      "cases": 22,
+      "failures": 0
+     },
+     "jwst_outside_grid": {
+      "cases": 44,
+      "failures": 0
+     },
+     "jwst_200K_steps_interpolate": {
+      "cases": 44,
+      "failures": 0
+     },
+     "phoenix_ne_on_ordinary_filter": {
+      "cases": 3,
+      "failures": 0
      }
     },
     "live": {
-     "requests": 60,
+     "requests": 105,
      "failures": 0,
      "examples": []
     },
@@ -296,23 +915,23 @@
   },
   "layer1_live": {
    "quad": {
-    "sampled": 150,
+    "sampled": 300,
     "of": 467659,
-    "pass": 150,
+    "pass": 300,
     "fail": 0,
     "examples": []
    },
    "power2": {
-    "sampled": 150,
+    "sampled": 300,
     "of": 474122,
-    "pass": 150,
+    "pass": 300,
     "fail": 0,
     "examples": []
    },
    "fourparam": {
-    "sampled": 150,
+    "sampled": 300,
     "of": 474466,
-    "pass": 150,
+    "pass": 300,
     "fail": 0,
     "examples": []
    },
@@ -381,10 +1000,18 @@
      {
       "path": "/api/nonexistent",
       "identical": true
+     },
+     {
+      "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=PRISM&model=ATLAS",
+      "identical": true
+     },
+     {
+      "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=PHOENIX-NE",
+      "identical": true
      }
     ],
-    "edge_identical": 16,
-    "edge_total": 16,
+    "edge_identical": 18,
+    "edge_total": 18,
     "health_stable_fields_identical": true
    }
   }

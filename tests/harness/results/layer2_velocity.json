@@ -22,7 +22,7 @@
     "failures": 0
    }
   },
-  "seconds": 24.8,
+  "seconds": 57.3,
   "examples": []
  },
  "power2": {
@@ -32,7 +32,7 @@
     "failures": 0
    },
    "xi=1": {
-    "points": 29463,
+    "points": 38329,
     "failures": 0
    },
    "xi=2": {
@@ -48,7 +48,7 @@
     "failures": 0
    }
   },
-  "seconds": 24.2,
+  "seconds": 73.1,
   "examples": []
  },
  "fourparam": {
@@ -58,7 +58,7 @@
     "failures": 0
    },
    "xi=1": {
-    "points": 29463,
+    "points": 38329,
     "failures": 0
    },
    "xi=2": {
@@ -74,7 +74,7 @@
     "failures": 0
    }
   },
-  "seconds": 26.4,
+  "seconds": 63.6,
   "examples": []
  }
 }

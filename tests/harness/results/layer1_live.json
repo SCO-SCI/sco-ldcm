@@ -1,22 +1,22 @@
 {
  "quad": {
-  "sampled": 150,
+  "sampled": 300,
   "of": 467659,
-  "pass": 150,
+  "pass": 300,
   "fail": 0,
   "examples": []
  },
  "power2": {
-  "sampled": 150,
+  "sampled": 300,
   "of": 474122,
-  "pass": 150,
+  "pass": 300,
   "fail": 0,
   "examples": []
  },
  "fourparam": {
-  "sampled": 150,
+  "sampled": 300,
   "of": 474466,
-  "pass": 150,
+  "pass": 300,
   "fail": 0,
   "examples": []
  },
@@ -85,10 +85,18 @@
    {
     "path": "/api/nonexistent",
     "identical": true
+   },
+   {
+    "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=PRISM&model=ATLAS",
+    "identical": true
+   },
+   {
+    "path": "/api/compute?teff=6000&logg=4.5&feh=0.0&filter=V&model=PHOENIX-NE",
+    "identical": true
    }
   ],
-  "edge_identical": 16,
-  "edge_total": 16,
+  "edge_identical": 18,
+  "edge_total": 18,
   "health_stable_fields_identical": true
  }
 }

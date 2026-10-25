@@ -1,0 +1,249 @@
+{
+ "engine": "mini-racer",
+ "page": "C:\\Users\\edkmu\\Desktop\\SCO-LDC_MAIN\\SCO-LDC_V5\\sco-ldcv5\\static\\index.html",
+ "page_md5": "bc54cce18420e935be6ae4fe7989075b",
+ "extracted": {
+  "scoEvaluate": {
+   "chars": 15177,
+   "lines": 292,
+   "md5": "da1d1d456941983267985d9bd74e5613"
+  },
+  "scoNoteKey": {
+   "chars": 72,
+   "lines": 3,
+   "md5": "8158dbef02ea327c8714b279672b4a05"
+  },
+  "scoShowNote": {
+   "chars": 388,
+   "lines": 8,
+   "md5": "8d0b5d0a7b0f4b5e4dc9be201f5c37c3"
+  },
+  "scoClearNote": {
+   "chars": 220,
+   "lines": 9,
+   "md5": "696fcd047dc0c431764f48840f20257c"
+  },
+  "scoNoteAfterRefresh": {
+   "chars": 5702,
+   "lines": 110,
+   "md5": "62ba14f94bfcca9c176dcd2014f30fea"
+  }
+ },
+ "quad": {
+  "filters": 26,
+  "models": [
+   "ATLAS",
+   "PHOENIX",
+   "PHOENIX-COND"
+  ],
+  "velocities": [
+   "0",
+   "1",
+   "2",
+   "4",
+   "8"
+  ],
+  "grids": 146,
+  "discrete_states": 1944,
+  "typed_states": 14904,
+  "tags": 212154,
+  "distinct_tags": 1081,
+  "transitions": 5749,
+  "notes_checked": 4327,
+  "deepest_settle": 3,
+  "xi_kept_on_filter_change": 233,
+  "xi_moved_on_filter_change": 100,
+  "order_targets": 146,
+  "order_reachable": 146,
+  "permitted_orders_histogram": {
+   "6": 146
+  },
+  "jwst": {},
+  "failures": {},
+  "examples": {},
+  "seconds": 55.9
+ },
+ "power2": {
+  "filters": 35,
+  "models": [
+   "ATLAS",
+   "PHOENIX-COND",
+   "PHOENIX-NE"
+  ],
+  "velocities": [
+   "0",
+   "1",
+   "2",
+   "4",
+   "8"
+  ],
+  "grids": 149,
+  "discrete_states": 2592,
+  "typed_states": 19872,
+  "tags": 392306,
+  "distinct_tags": 1912,
+  "transitions": 7321,
+  "notes_checked": 5918,
+  "deepest_settle": 3,
+  "xi_kept_on_filter_change": 577,
+  "xi_moved_on_filter_change": 1643,
+  "order_targets": 149,
+  "order_reachable": 149,
+  "permitted_orders_histogram": {
+   "6": 138,
+   "4": 11
+  },
+  "jwst": {
+   "F210M": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "F322W2": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "F444W": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "SOSS1": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "SOSS2": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "F277W": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "G235H": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "G235M": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "G395H": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "G395M": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   },
+   "PRISM": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 1
+   }
+  },
+  "failures": {},
+  "examples": {},
+  "seconds": 80.1
+ },
+ "fourparam": {
+  "filters": 39,
+  "models": [
+   "ATLAS",
+   "PHOENIX-COND",
+   "PHOENIX",
+   "PHOENIX-NE"
+  ],
+  "velocities": [
+   "0",
+   "1",
+   "2",
+   "4",
+   "8"
+  ],
+  "grids": 150,
+  "discrete_states": 3600,
+  "typed_states": 27600,
+  "tags": 642340,
+  "distinct_tags": 2898,
+  "transitions": 8056,
+  "notes_checked": 6652,
+  "deepest_settle": 3,
+  "xi_kept_on_filter_change": 888,
+  "xi_moved_on_filter_change": 2066,
+  "order_targets": 150,
+  "order_reachable": 150,
+  "permitted_orders_histogram": {
+   "6": 139,
+   "4": 11
+  },
+  "jwst": {
+   "F210M": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "F322W2": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "F444W": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "SOSS1": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "SOSS2": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "F277W": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "G235H": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "G235M": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "G395H": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "G395M": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   },
+   "PRISM": {
+    "passes": 3,
+    "kept_1kms": 23,
+    "moved": 5
+   }
+  },
+  "failures": {},
+  "examples": {},
+  "seconds": 106.8
+ }
+}

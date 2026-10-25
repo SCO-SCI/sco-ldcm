@@ -1,0 +1,294 @@
+{
+ "quad": {
+  "points": 592234,
+  "discrepancies": 0,
+  "with_edge_point": 2898,
+  "with_correction": 19885,
+  "non_realizable": 0,
+  "non_realizable_examples": [],
+  "seconds": 42.7,
+  "examples": []
+ },
+ "power2": {
+  "points": 597597,
+  "discrepancies": 0,
+  "with_edge_point": 61421,
+  "with_correction": 0,
+  "non_realizable": 20,
+  "non_realizable_examples": [
+   {
+    "point": {
+     "filter": "H",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "kind": "random",
+     "teff": 37947.2691,
+     "logg": 4.2392,
+     "feh": 0.0
+    },
+    "h1_prime": 0.622671,
+    "h2_prime": 0.634809
+   },
+   {
+    "point": {
+     "filter": "H",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "kind": "center",
+     "teff": 38500.0,
+     "logg": 4.25,
+     "feh": 0.0
+    },
+    "h1_prime": 0.568227,
+    "h2_prime": 0.728199
+   },
+   {
+    "point": {
+     "filter": "H",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "kind": "center",
+     "teff": 39500.0,
+     "logg": 4.25,
+     "feh": 0.0
+    },
+    "h1_prime": 0.594974,
+    "h2_prime": 0.68635
+   },
+   {
+    "point": {
+     "filter": "H",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "kind": "random",
+     "teff": 39308.3208,
+     "logg": 4.2963,
+     "feh": 0.0
+    },
+    "h1_prime": 0.59588,
+    "h2_prime": 0.683123
+   },
+   {
+    "point": {
+     "filter": "K",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "kind": "center",
+     "teff": 37500.0,
+     "logg": 4.25,
+     "feh": 0.0
+    },
+    "h1_prime": 0.517702,
+    "h2_prime": 0.814127
+   },
+   {
+    "point": {
+     "filter": "K",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "kind": "random",
+     "teff": 37345.054,
+     "logg": 4.2687,
+     "feh": 0.0
+    },
+    "h1_prime": 0.534225,
+    "h2_prime": 0.784765
+   },
+   {
+    "point": {
+     "filter": "K",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "kind": "center",
+     "teff": 38500.0,
+     "logg": 4.25,
+     "feh": 0.0
+    },
+    "h1_prime": 0.575833,
+    "h2_prime": 0.719714
+   },
+   {
+    "point": {
+     "filter": "F322W2",
+     "model": "PHOENIX-NE",
+     "xi": 1.0,
+     "kind": "center",
+     "teff": 2650.0,
+     "logg": 3.25,
+     "feh": 0.0
+    },
+    "h1_prime": -5.942449,
+    "h2_prime": 10.697519
+   },
+   {
+    "point": {
+     "filter": "F322W2",
+     "model": "PHOENIX-NE",
+     "xi": 1.0,
+     "kind": "random",
+     "teff": 2676.4373,
+     "logg": 3.0613,
+     "feh": 0.0
+    },
+    "h1_prime": -7.255367,
+    "h2_prime": 12.908623
+   },
+   {
+    "point": {
+     "filter": "F322W2",
+     "model": "PHOENIX-NE",
+     "xi": 1.0,
+     "kind": "center",
+     "teff": 2750.0,
+     "logg": 3.25,
+     "feh": 0.0
+    },
+    "h1_prime": -19.100763,
+    "h2_prime": 31.541175
+   }
+  ],
+  "seconds": 60.0,
+  "examples": []
+ },
+ "fourparam": {
+  "points": 597941,
+  "discrepancies": 0,
+  "with_edge_point": 61421,
+  "with_correction": 18329,
+  "non_realizable": 7309,
+  "non_realizable_examples": [
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3500.0,
+     "logg": 0.0,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 0.153762,
+    "h2_prime": 0.722064
+   },
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3500.0,
+     "logg": 0.5,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 0.204048,
+    "h2_prime": 0.672054
+   },
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3500.0,
+     "logg": 1.0,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 0.253173,
+    "h2_prime": 0.624145
+   },
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3500.0,
+     "logg": 1.5,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 0.31395,
+    "h2_prime": 0.564723
+   },
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3500.0,
+     "logg": 2.0,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 0.384795,
+    "h2_prime": 0.495602
+   },
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3500.0,
+     "logg": 4.5,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 1.021066,
+    "h2_prime": 0.032366
+   },
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3500.0,
+     "logg": 5.0,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 1.11818,
+    "h2_prime": -0.058945
+   },
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3750.0,
+     "logg": 0.0,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 0.158185,
+    "h2_prime": 0.746047
+   },
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3750.0,
+     "logg": 0.5,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 0.254673,
+    "h2_prime": 0.651647
+   },
+   {
+    "point": {
+     "filter": "b",
+     "model": "ATLAS",
+     "xi": 0.0,
+     "teff": 3750.0,
+     "logg": 1.0,
+     "feh": 0.0,
+     "kind": "node"
+    },
+    "h1_prime": 0.306833,
+    "h2_prime": 0.600875
+   }
+  ],
+  "seconds": 52.7,
+  "examples": []
+ }
+}
